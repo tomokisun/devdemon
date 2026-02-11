@@ -3,9 +3,9 @@ import { readFileSync } from 'fs';
 import { EventEmitter } from 'events';
 import { render } from 'ink';
 import React from 'react';
-import { resolveRolesDir, loadAllRoles, loadRole } from '../../roles/loader.js';
+import { resolveRolesDir, loadAllRoles, loadAllRolesGrouped, loadRole, getBuiltinRolesDir } from '../../roles/loader.js';
 import { join } from 'path';
-import { ensureDevDemonDir, getStatePath, getQueuePath, getSettingsPath } from '../../utils/paths.js';
+import { ensureDevDemonDir, getStatePath, getQueuePath, getSettingsPath, getProjectRolesDir } from '../../utils/paths.js';
 import { SettingsStore } from '../../settings/store.js';
 import { App } from '../../ui/app.js';
 import type { RoleConfig } from '../../roles/types.js';
@@ -62,20 +62,34 @@ export async function selectRole(
 }
 
 export async function resolveRole(options: StartOptions): Promise<RoleConfig> {
-  const rolesDir = resolveRolesDir({ rolesDir: options.rolesDir });
-
-  if (options.role) {
-    const rolePath = join(rolesDir, `${options.role}.md`);
-    try {
-      return loadRole(rolePath);
-    } catch {
-      console.error(`Error: Role "${options.role}" not found in ${rolesDir}`);
-      process.exit(1);
+  if (options.rolesDir) {
+    const rolesDir = resolveRolesDir({ rolesDir: options.rolesDir });
+    if (options.role) {
+      const rolePath = join(rolesDir, `${options.role}.md`);
+      try {
+        return loadRole(rolePath);
+      } catch {
+        console.error(`Error: Role "${options.role}" not found in ${rolesDir}`);
+        process.exit(1);
+      }
     }
+    const roles = loadAllRoles(rolesDir);
+    return selectRole(roles);
   }
 
-  const roles = loadAllRoles(rolesDir);
-  return selectRole(roles);
+  const { builtin, project } = loadAllRolesGrouped();
+  const allRoles = [...builtin, ...project];
+
+  if (options.role) {
+    const match = allRoles.find(
+      r => r.filePath.endsWith(`/${options.role}.md`),
+    );
+    if (match) return match;
+    console.error(`Error: Role "${options.role}" not found.`);
+    process.exit(1);
+  }
+
+  return selectRole(allRoles);
 }
 
 async function selectRoleInk(roles: RoleConfig[]): Promise<RoleConfig> {
@@ -128,30 +142,59 @@ function createDryRunDaemon(role: RoleConfig, repoPath: string) {
 }
 
 export async function startAction(options: StartOptions): Promise<void> {
-  const rolesDir = resolveRolesDir({ rolesDir: options.rolesDir });
   const repoPath = options.repo ?? process.cwd();
   const settingsStore = new SettingsStore(getSettingsPath(repoPath));
 
   let role: RoleConfig;
+  let allRoles: RoleConfig[];
 
-  if (options.role) {
-    const rolePath = join(rolesDir, `${options.role}.md`);
-    try {
-      role = loadRole(rolePath);
-    } catch {
-      console.error(`Error: Role "${options.role}" not found in ${rolesDir}`);
-      process.exit(1);
-    }
-  } else {
-    const roles = loadAllRoles(rolesDir);
-    if (roles.length === 0) {
-      console.error('No roles found.');
-      process.exit(1);
-    }
-    if (roles.length === 1) {
-      role = roles[0]!;
+  if (options.rolesDir) {
+    const rolesDir = resolveRolesDir({ rolesDir: options.rolesDir });
+    if (options.role) {
+      const rolePath = join(rolesDir, `${options.role}.md`);
+      try {
+        role = loadRole(rolePath);
+      } catch {
+        console.error(`Error: Role "${options.role}" not found in ${rolesDir}`);
+        process.exit(1);
+      }
     } else {
-      role = await selectRoleInk(roles);
+      const roles = loadAllRoles(rolesDir);
+      if (roles.length === 0) {
+        console.error('No roles found.');
+        process.exit(1);
+      }
+      if (roles.length === 1) {
+        role = roles[0]!;
+      } else {
+        role = await selectRoleInk(roles);
+      }
+    }
+    allRoles = loadAllRoles(rolesDir);
+  } else {
+    const grouped = loadAllRolesGrouped();
+    allRoles = [...grouped.builtin, ...grouped.project];
+
+    if (options.role) {
+      const match = allRoles.find(
+        r => r.filePath.endsWith(`/${options.role}.md`),
+      );
+      if (match) {
+        role = match;
+      } else {
+        console.error(`Error: Role "${options.role}" not found.`);
+        process.exit(1);
+      }
+    } else {
+      if (allRoles.length === 0) {
+        console.error('No roles found.');
+        process.exit(1);
+      }
+      if (allRoles.length === 1) {
+        role = allRoles[0]!;
+      } else {
+        role = await selectRoleInk(allRoles);
+      }
     }
   }
 
@@ -160,7 +203,6 @@ export async function startAction(options: StartOptions): Promise<void> {
   }
 
   if (options.verbose) {
-    console.log(`Roles directory: ${rolesDir}`);
     console.log(`Role file: ${role.filePath}`);
     console.log(`Interval: ${role.frontmatter.interval}s`);
     console.log(`Max turns: ${role.frontmatter.maxTurns}`);
@@ -169,9 +211,6 @@ export async function startAction(options: StartOptions): Promise<void> {
     if (settings.model) console.log(`Model: ${settings.model}`);
     if (settings.language) console.log(`Language: ${settings.language}`);
   }
-
-  // Load all roles for welcome screen display
-  const allRoles = loadAllRoles(rolesDir);
 
   if (options.dryRun) {
     const daemon = createDryRunDaemon(role, repoPath);

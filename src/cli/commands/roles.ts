@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { resolveRolesDir, loadAllRoles } from '../../roles/loader.js';
+import { resolveRolesDir, loadAllRoles, loadAllRolesGrouped } from '../../roles/loader.js';
+import { getProjectRolesDir } from '../../utils/paths.js';
 import { promptRoleFrontmatter } from '../prompts/role-prompts.js';
 import { generateRoleBody } from '../generators/role-body-generator.js';
 import { writeRole } from '../../roles/writer.js';
@@ -71,7 +72,7 @@ export async function createRoleAction(
   const body = await generateRoleBody({ frontmatter });
 
   // Step 4: Write file
-  const rolesDir = opts.rolesDir ?? resolveRolesDir();
+  const rolesDir = opts.rolesDir ?? getProjectRolesDir();
   const filePath = writeRole({ frontmatter, body, rolesDir });
   console.log(`\nRole created: ${filePath}`);
 }
@@ -85,15 +86,36 @@ rolesCommand
   .description('List all available roles')
   .action(() => {
     const opts = rolesCommand.opts<RolesOptions>();
-    const rolesDir = resolveRolesDir({ rolesDir: opts.rolesDir });
-    const roles = loadAllRoles(rolesDir);
 
-    if (roles.length === 0) {
+    if (opts.rolesDir) {
+      const roles = loadAllRoles(opts.rolesDir);
+      if (roles.length === 0) {
+        console.log('No roles found. Run "devdemon roles create <name>" to create one.');
+        return;
+      }
+      printRoleTable(roles);
+      return;
+    }
+
+    const { builtin, project } = loadAllRolesGrouped();
+
+    if (builtin.length === 0 && project.length === 0) {
       console.log('No roles found. Run "devdemon roles create <name>" to create one.');
       return;
     }
 
-    printRoleTable(roles);
+    if (builtin.length > 0) {
+      console.log('Built-in Roles');
+      console.log('==============');
+      printRoleTable(builtin);
+    }
+
+    if (project.length > 0) {
+      if (builtin.length > 0) console.log('');
+      console.log('Project Roles (.devdemon/roles/)');
+      console.log('================================');
+      printRoleTable(project);
+    }
   });
 
 rolesCommand
@@ -101,8 +123,15 @@ rolesCommand
   .description('Show detailed information about a role')
   .action((name: string) => {
     const opts = rolesCommand.opts<RolesOptions>();
-    const rolesDir = resolveRolesDir({ rolesDir: opts.rolesDir });
-    const roles = loadAllRoles(rolesDir);
+
+    let roles: RoleConfig[];
+    if (opts.rolesDir) {
+      roles = loadAllRoles(opts.rolesDir);
+    } else {
+      const grouped = loadAllRolesGrouped();
+      roles = [...grouped.builtin, ...grouped.project];
+    }
+
     const role = roles.find(
       r => r.frontmatter.name.toLowerCase() === name.toLowerCase()
         || r.filePath.endsWith(`/${name}.md`),

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput, useStdout } from 'ink';
 
 interface InputBarProps {
   value: string;
@@ -8,6 +8,9 @@ interface InputBarProps {
 }
 
 export function InputBar({ value, onChange, onSubmit }: InputBarProps) {
+  const { stdout } = useStdout();
+  const width = stdout.columns || 80;
+
   useInput((input, key) => {
     if (key.return) {
       // Shift+Enter or Meta+Enter (Option+Enter on macOS): insert newline
@@ -36,7 +39,7 @@ export function InputBar({ value, onChange, onSubmit }: InputBarProps) {
   return (
     <Box flexDirection="column">
       <Text> </Text>
-      <Text dimColor>{'─'.repeat(80)}</Text>
+      <Text dimColor>{'─'.repeat(width)}</Text>
       <Box flexDirection="column" paddingX={1}>
         {lines.map((line, i) => (
           <Box key={i}>
@@ -48,7 +51,7 @@ export function InputBar({ value, onChange, onSubmit }: InputBarProps) {
           </Box>
         ))}
       </Box>
-      <Text dimColor>{'─'.repeat(80)}</Text>
+      <Text dimColor>{'─'.repeat(width)}</Text>
     </Box>
   );
 }

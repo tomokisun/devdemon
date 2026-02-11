@@ -9,6 +9,7 @@ import {
   getQueuePath,
   getLogPath,
   getSettingsPath,
+  getProjectRolesDir,
   ensureDevDemonDir,
 } from '../../../src/utils/paths.js';
 
@@ -40,6 +41,11 @@ describe('Paths', () => {
   test('getLogPath() が debug.log パスを返す', () => {
     const p = getLogPath('/my/repo');
     expect(p).toBe(join('/my/repo', '.devdemon', 'debug.log'));
+  });
+
+  test('getProjectRolesDir() が roles パスを返す', () => {
+    const p = getProjectRolesDir('/my/repo');
+    expect(p).toBe(join('/my/repo', '.devdemon', 'roles'));
   });
 
   test('ensureDevDemonDir() がディレクトリを作成する', () => {

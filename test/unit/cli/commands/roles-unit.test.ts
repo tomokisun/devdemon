@@ -51,7 +51,7 @@ describe('roles command unit tests', () => {
 
       // 結果を確認
       expect(consoleLogs).toContain('NAME       DESCRIPTION     ');
-      expect(consoleLogs).toContain('----------------------------');
+      expect(consoleLogs).toContain('---------------------------');
       expect(consoleLogs).toContain('Test Role  Test description');
 
       // 元に戻す
@@ -98,8 +98,8 @@ describe('roles command unit tests', () => {
         console.log(`${name}  ${desc}`);
       }
 
-      expect(consoleLogs).toContain('NAME         DESCRIPTION');
-      expect(consoleLogs).toContain('No Desc Role ');
+      expect(consoleLogs).toContain('NAME          DESCRIPTION');
+      expect(consoleLogs).toContain('No Desc Role             ');
 
       console.log = originalLog;
     });

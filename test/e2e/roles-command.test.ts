@@ -7,7 +7,8 @@ describe('devdemon roles (E2E)', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Software Engineer');
     expect(result.stdout).toContain('Product Manager');
-    expect(result.stdout).toContain('Code Reviewer');
+    expect(result.stdout).toContain('document-creator');
+    expect(result.stdout).toContain('Built-in Roles');
   });
 
   test('roles show swe displays SWE role details', async () => {
@@ -15,7 +16,7 @@ describe('devdemon roles (E2E)', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Software Engineer');
     expect(result.stdout).toContain('Interval:');
-    expect(result.stdout).toContain('300s');
+    expect(result.stdout).toContain('5s');
     expect(result.stdout).toContain('Description:');
   });
 

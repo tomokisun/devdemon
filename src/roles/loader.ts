@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, resolve, extname } from 'path';
 import { validateFrontmatter } from './validator.js';
 import type { RoleConfig } from './types.js';
+import { getProjectRolesDir } from '../utils/paths.js';
 
 export function loadRole(filePath: string): RoleConfig {
   const absolutePath = resolve(filePath);
@@ -24,6 +25,24 @@ export function loadAllRoles(dirPath: string): RoleConfig[] {
     }
   }
   return roles;
+}
+
+export interface GroupedRoles {
+  builtin: RoleConfig[];
+  project: RoleConfig[];
+}
+
+export function loadAllRolesGrouped(options?: { rolesDir?: string }): GroupedRoles {
+  const builtinDir = getBuiltinRolesDir();
+  const projectDir = options?.rolesDir ?? getProjectRolesDir();
+  return {
+    builtin: loadAllRoles(builtinDir),
+    project: loadAllRoles(projectDir),
+  };
+}
+
+export function getBuiltinRolesDir(): string {
+  return resolve(import.meta.dir, '../../roles');
 }
 
 export function resolveRolesDir(options?: { rolesDir?: string }): string {

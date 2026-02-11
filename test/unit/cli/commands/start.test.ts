@@ -384,7 +384,6 @@ describe('startAction', () => {
       verbose: true,
     });
 
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Roles directory:'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Role file:'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Interval: 60s'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Max turns: 5'));

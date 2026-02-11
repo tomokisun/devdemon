@@ -21,6 +21,10 @@ export function getSettingsPath(repoPath?: string): string {
   return join(getDevDemonDir(repoPath), 'settings.json');
 }
 
+export function getProjectRolesDir(repoPath?: string): string {
+  return join(getDevDemonDir(repoPath), 'roles');
+}
+
 export function ensureDevDemonDir(repoPath?: string): string {
   const dir = getDevDemonDir(repoPath);
   if (!existsSync(dir)) {

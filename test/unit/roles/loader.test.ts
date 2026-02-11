@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'bun:test';
 import { resolve, join } from 'path';
-import { loadRole, loadAllRoles, resolveRolesDir } from '../../../src/roles/loader.js';
+import { loadRole, loadAllRoles, resolveRolesDir, getBuiltinRolesDir, loadAllRolesGrouped } from '../../../src/roles/loader.js';
 
 const FIXTURES_DIR = resolve(import.meta.dir, '../../fixtures/roles');
 
@@ -106,6 +106,37 @@ describe('RoleLoader', () => {
       } finally {
         process.cwd = originalCwd;
       }
+    });
+  });
+
+  describe('getBuiltinRolesDir', () => {
+    test('ビルトインrolesディレクトリパスを返す', () => {
+      const dir = getBuiltinRolesDir();
+      expect(dir).toContain('roles');
+      // ビルトインディレクトリは実際に存在する
+      expect(dir).toMatch(/roles$/);
+    });
+  });
+
+  describe('loadAllRolesGrouped', () => {
+    test('ビルトインロールを返す', () => {
+      const grouped = loadAllRolesGrouped();
+      expect(grouped.builtin.length).toBeGreaterThanOrEqual(2);
+      const names = grouped.builtin.map(r => r.frontmatter.name);
+      expect(names).toContain('Software Engineer');
+      expect(names).toContain('Product Manager');
+    });
+
+    test('プロジェクトロールが存在しない場合は空配列を返す', () => {
+      const grouped = loadAllRolesGrouped({ rolesDir: '/nonexistent/path' });
+      expect(grouped.project).toEqual([]);
+    });
+
+    test('カスタムrolesDirが指定された場合はそれをプロジェクトロールとして使用する', () => {
+      const grouped = loadAllRolesGrouped({ rolesDir: FIXTURES_DIR });
+      expect(grouped.project.length).toBeGreaterThanOrEqual(3);
+      const names = grouped.project.map(r => r.frontmatter.name);
+      expect(names).toContain('Software Engineer');
     });
   });
 });
