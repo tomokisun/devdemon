@@ -1,6 +1,6 @@
 ---
 name: Software Engineer
-interval: 300
+interval: 5
 maxTurns: 500
 tools:
   - Read
