@@ -1,4 +1,5 @@
-import { appendFileSync } from 'fs';
+import { appendFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 import { getLogPath } from './paths.js';
 
 export type LogLevel = 'info' | 'warn' | 'error';
@@ -36,6 +37,7 @@ export class Logger {
       message,
       ...(data !== undefined ? { data } : {}),
     };
+    mkdirSync(dirname(this.filePath), { recursive: true });
     appendFileSync(this.filePath, JSON.stringify(entry) + '\n');
   }
 }
