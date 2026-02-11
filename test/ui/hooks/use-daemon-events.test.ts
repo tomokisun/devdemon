@@ -10,6 +10,7 @@ function makeCurrentTask(entries: LogEntry[] = []): CurrentTaskState {
     streamingText: '',
     cycleStartedAt: Date.now(),
     currentTokens: 0,
+    taskAgentProgress: { total: 0, completed: 0, agents: [] },
   };
 }
 
@@ -396,6 +397,258 @@ describe('processEvents', () => {
       expect(summary).toBeDefined();
       expect(summary!.text).toContain('3 Task agents finished');
       expect(summary!.childEntries).toHaveLength(3);
+    });
+  });
+
+  describe('Task agent progress tracking', () => {
+    test('Task tool_useが到着するとtaskAgentProgressのtotalが増加する', () => {
+      const { setter, getState } = createMockSetState();
+      const setInitInfo = mock(() => {});
+
+      const events: UIEvent[] = [
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_use',
+            text: 'Task(Fix auth)',
+            timestamp: Date.now(),
+            toolName: 'Task',
+            toolUseId: 'tu-task-1',
+          },
+        },
+      ];
+
+      processEvents(events, setter as any, setInitInfo as any);
+
+      const state = getState();
+      expect(state!.taskAgentProgress.total).toBe(1);
+      expect(state!.taskAgentProgress.completed).toBe(0);
+      expect(state!.taskAgentProgress.agents).toHaveLength(1);
+      expect(state!.taskAgentProgress.agents[0].name).toBe('Fix auth');
+      expect(state!.taskAgentProgress.agents[0].status).toBe('running');
+    });
+
+    test('複数のTask tool_useでtotalが正しくカウントされる', () => {
+      const { setter, getState } = createMockSetState();
+      const setInitInfo = mock(() => {});
+
+      const events: UIEvent[] = [
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_use',
+            text: 'Task(Fix auth)',
+            timestamp: Date.now(),
+            toolName: 'Task',
+            toolUseId: 'tu-task-1',
+          },
+        },
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_use',
+            text: 'Task(Update tests)',
+            timestamp: Date.now(),
+            toolName: 'Task',
+            toolUseId: 'tu-task-2',
+          },
+        },
+      ];
+
+      processEvents(events, setter as any, setInitInfo as any);
+
+      const state = getState();
+      expect(state!.taskAgentProgress.total).toBe(2);
+      expect(state!.taskAgentProgress.completed).toBe(0);
+      expect(state!.taskAgentProgress.agents).toHaveLength(2);
+    });
+
+    test('Task tool_groupが到着するとcompletedが増加する', () => {
+      const initialEntries: LogEntry[] = [
+        {
+          kind: 'tool_use',
+          text: 'Task(Fix auth)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolUseId: 'tu-task-1',
+        },
+      ];
+      const initialState = makeCurrentTask(initialEntries);
+      initialState.taskAgentProgress = {
+        total: 1,
+        completed: 0,
+        agents: [{ name: 'Fix auth', status: 'running' }],
+      };
+      const { setter, getState } = createMockSetState(initialState);
+      const setInitInfo = mock(() => {});
+
+      const events: UIEvent[] = [
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_group',
+            text: 'Task(Fix auth)',
+            timestamp: Date.now(),
+            toolName: 'Task',
+            toolUseId: 'tu-task-1',
+            toolStats: { totalToolUseCount: 3, totalTokens: 10000 },
+          },
+        },
+      ];
+
+      processEvents(events, setter as any, setInitInfo as any);
+
+      const state = getState();
+      expect(state!.taskAgentProgress.total).toBe(1);
+      expect(state!.taskAgentProgress.completed).toBe(1);
+      expect(state!.taskAgentProgress.agents[0].status).toBe('completed');
+    });
+
+    test('Task以外のtool_useはtaskAgentProgressを変更しない', () => {
+      const { setter, getState } = createMockSetState();
+      const setInitInfo = mock(() => {});
+
+      const events: UIEvent[] = [
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_use',
+            text: 'Bash(ls)',
+            timestamp: Date.now(),
+            toolName: 'Bash',
+            toolUseId: 'tu-bash-1',
+          },
+        },
+      ];
+
+      processEvents(events, setter as any, setInitInfo as any);
+
+      const state = getState();
+      expect(state!.taskAgentProgress.total).toBe(0);
+      expect(state!.taskAgentProgress.completed).toBe(0);
+      expect(state!.taskAgentProgress.agents).toHaveLength(0);
+    });
+
+    test('Task(description)のパターンからdescriptionが抽出される', () => {
+      const { setter, getState } = createMockSetState();
+      const setInitInfo = mock(() => {});
+
+      const events: UIEvent[] = [
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_use',
+            text: 'Task(Refactor database layer)',
+            timestamp: Date.now(),
+            toolName: 'Task',
+            toolUseId: 'tu-task-1',
+          },
+        },
+      ];
+
+      processEvents(events, setter as any, setInitInfo as any);
+
+      const state = getState();
+      expect(state!.taskAgentProgress.agents[0].name).toBe('Refactor database layer');
+    });
+
+    test('Task(...)パターンに一致しない場合はテキスト全体がnameになる', () => {
+      const { setter, getState } = createMockSetState();
+      const setInitInfo = mock(() => {});
+
+      const events: UIEvent[] = [
+        {
+          type: 'log',
+          entry: {
+            kind: 'tool_use',
+            text: 'Some custom text',
+            timestamp: Date.now(),
+            toolName: 'Task',
+            toolUseId: 'tu-task-1',
+          },
+        },
+      ];
+
+      processEvents(events, setter as any, setInitInfo as any);
+
+      const state = getState();
+      expect(state!.taskAgentProgress.agents[0].name).toBe('Some custom text');
+    });
+
+    test('3つのTaskエージェントのうち2つが完了するとprogressが正しく反映される', () => {
+      const initialEntries: LogEntry[] = [
+        {
+          kind: 'tool_use',
+          text: 'Task(Agent 1)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolUseId: 'tu-task-1',
+        },
+        {
+          kind: 'tool_use',
+          text: 'Task(Agent 2)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolUseId: 'tu-task-2',
+        },
+        {
+          kind: 'tool_use',
+          text: 'Task(Agent 3)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolUseId: 'tu-task-3',
+        },
+      ];
+      const initialState = makeCurrentTask(initialEntries);
+      initialState.taskAgentProgress = {
+        total: 3,
+        completed: 0,
+        agents: [
+          { name: 'Agent 1', status: 'running' },
+          { name: 'Agent 2', status: 'running' },
+          { name: 'Agent 3', status: 'running' },
+        ],
+      };
+      const { setter, getState } = createMockSetState(initialState);
+      const setInitInfo = mock(() => {});
+
+      // Complete agent 1
+      processEvents([{
+        type: 'log',
+        entry: {
+          kind: 'tool_group',
+          text: 'Task(Agent 1)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolUseId: 'tu-task-1',
+          toolStats: { totalToolUseCount: 2, totalTokens: 5000 },
+        },
+      }], setter as any, setInitInfo as any);
+
+      let state = getState();
+      expect(state!.taskAgentProgress.total).toBe(3);
+      expect(state!.taskAgentProgress.completed).toBe(1);
+
+      // Complete agent 2
+      processEvents([{
+        type: 'log',
+        entry: {
+          kind: 'tool_group',
+          text: 'Task(Agent 2)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolUseId: 'tu-task-2',
+          toolStats: { totalToolUseCount: 3, totalTokens: 8000 },
+        },
+      }], setter as any, setInitInfo as any);
+
+      state = getState();
+      expect(state!.taskAgentProgress.total).toBe(3);
+      expect(state!.taskAgentProgress.completed).toBe(2);
+      // Agent 3 should still be running
+      const runningAgents = state!.taskAgentProgress.agents.filter(a => a.status === 'running');
+      expect(runningAgents).toHaveLength(1);
+      expect(runningAgents[0].name).toBe('Agent 3');
     });
   });
 

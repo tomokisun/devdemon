@@ -312,7 +312,7 @@ describe('InteractionLog - Extended Coverage', () => {
       expect(lastFrame()!).toContain('2m 5s');
     });
 
-    test('改行を含むテキストは最初の行のみ表示される', () => {
+    test('改行を含むassistant_textは全行が表示される', () => {
       const entries: LogEntry[] = [
         makeEntry({
           kind: 'assistant_text',
@@ -323,9 +323,10 @@ describe('InteractionLog - Extended Coverage', () => {
         <InteractionLog entries={entries} streamingText="" />
       );
       const frame = lastFrame()!;
+      // AssistantTextRenderer renders full multi-line text
       expect(frame).toContain('First line');
-      expect(frame).not.toContain('Second line');
-      expect(frame).not.toContain('Third line');
+      expect(frame).toContain('Second line');
+      expect(frame).toContain('Third line');
     });
   });
 });

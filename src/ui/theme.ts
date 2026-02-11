@@ -38,6 +38,37 @@ export const colors: ThemeColors = {
 };
 
 // ---------------------------------------------------------------------------
+// Component-specific style tokens
+// ---------------------------------------------------------------------------
+
+/** Style tokens for ★ Insight bordered blocks */
+export const insightStyles = {
+  border: '#c084fc',      // secondary/magenta for the border
+  background: '#1a1025',  // subtle dark purple background
+  header: '#c084fc',      // ★ Insight header color
+};
+
+/** Style tokens for command badge rendering */
+export const badgeStyles = {
+  background: '#2a2a3a',  // subtle dark background
+  text: '#67e8f9',        // primary/cyan text
+};
+
+/** Style tokens for box-drawing table rendering */
+export const tableStyles = {
+  border: '#a8a29e',      // muted color for box drawing chars
+  header: '#ffffff',      // white for header text
+};
+
+/** Style tokens for user Q&A display */
+export const userAnswerStyles = {
+  prefix: '#67e8f9',      // info/cyan for ● prefix
+  question: '#a8a29e',    // muted for question
+  answer: '#67e8f9',      // primary for answer
+  arrow: '#a8a29e',       // muted for →
+};
+
+// ---------------------------------------------------------------------------
 // StyleDef for log entries
 // ---------------------------------------------------------------------------
 

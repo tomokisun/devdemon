@@ -5,6 +5,7 @@ import { STYLE_MAP, colors } from '../theme.js';
 import { truncateLine } from './interaction-log-styles.js';
 import { ToolGroupEntry } from './tool-group-entry.js';
 import { TaskAgentsSummaryEntry } from './task-agents-summary-entry.js';
+import { AssistantTextRenderer } from './assistant-text-renderer.js';
 
 interface LogEntryRendererProps {
   entry: LogEntry;
@@ -39,6 +40,17 @@ export function LogEntryRenderer({ entry }: LogEntryRendererProps) {
   // task_agents_summary: tree view of completed tasks
   if (entry.kind === 'task_agents_summary' && entry.childEntries) {
     return <TaskAgentsSummaryEntry entry={entry} />;
+  }
+
+  // Rich rendering for assistant_text using AssistantTextRenderer
+  if (entry.kind === 'assistant_text') {
+    const style = STYLE_MAP[entry.kind];
+    return (
+      <Box>
+        <Text color={style.color}>{style.prefix}</Text>
+        <AssistantTextRenderer text={entry.text} />
+      </Box>
+    );
   }
 
   // Special rendering for cycle_separator
