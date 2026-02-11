@@ -90,7 +90,7 @@ describe('InteractionLog', () => {
     expect(frame).toContain('Third message');
   });
 
-  test('長いテキストは120文字に切り詰められる', () => {
+  test('assistant_textは全文がリッチレンダリングされる', () => {
     const longText = 'A'.repeat(200);
     const entries: LogEntry[] = [
       makeEntry({ kind: 'assistant_text', text: longText }),
@@ -99,14 +99,28 @@ describe('InteractionLog', () => {
       <InteractionLog entries={entries} streamingText="" />
     );
     const frame = lastFrame()!;
-    // The component truncates text to 120 chars (117 + '...')
-    // Verify truncation occurred: 200 As should not all be present
+    // AssistantTextRenderer renders full text without truncation
     const allText = frame.replace(/\n/g, '').replace(/ /g, '');
-    expect(allText).not.toContain('A'.repeat(200));
-    // Verify the ellipsis is in the output
+    expect(allText).toContain('A'.repeat(200));
+  });
+
+  test('長いtool_batchテキストは120文字に切り詰められる', () => {
+    const longText = 'B'.repeat(200);
+    const entries: LogEntry[] = [{
+      kind: 'tool_batch',
+      text: longText,
+      timestamp: Date.now(),
+      batchedTools: [{ toolName: 'Read', count: 1 }],
+    }];
+    const { lastFrame } = render(
+      <InteractionLog entries={entries} streamingText="" />
+    );
+    const frame = lastFrame()!;
+    // tool_batch entries are still truncated via truncateLine
+    const allText = frame.replace(/\n/g, '').replace(/ /g, '');
+    expect(allText).not.toContain('B'.repeat(200));
     expect(frame).toContain('...');
-    // The truncated text should have exactly 117 As followed by '...'
-    expect(allText).toContain('A'.repeat(117) + '...');
+    expect(allText).toContain('B'.repeat(117) + '...');
   });
 
   test('streamingTextは末尾にdimスタイルで表示される', () => {

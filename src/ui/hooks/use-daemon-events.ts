@@ -1,5 +1,6 @@
 import type { LogEntry, UIEvent } from '../../agent/message-stream.js';
 import type { CurrentTaskState } from './use-daemon-state.js';
+import type { TaskAgentProgress } from './use-daemon-state.js';
 import { addEntryToState } from './use-daemon-state.js';
 import { tryMergeBatch } from './tool-batching.js';
 
@@ -11,6 +12,40 @@ function addEntry(setCurrentTask: SetCurrentTask, entry: LogEntry): void {
     if (!prev) return prev;
     return addEntryToState(prev, entry);
   });
+}
+
+/** Register a new Task agent as running in the progress tracker. */
+function trackTaskAgentStarted(prev: CurrentTaskState, entry: LogEntry): TaskAgentProgress {
+  const progress = prev.taskAgentProgress;
+  // Derive a short description from the tool_use text (e.g. "Task(Fix auth)" -> "Fix auth")
+  const match = entry.text.match(/^Task\((.+)\)$/);
+  const name = match ? match[1] : entry.text;
+  return {
+    total: progress.total + 1,
+    completed: progress.completed,
+    agents: [...progress.agents, { name, status: 'running' }],
+  };
+}
+
+/** Mark a Task agent as completed in the progress tracker (by toolUseId). */
+function trackTaskAgentCompleted(prev: CurrentTaskState, toolUseId: string): TaskAgentProgress {
+  const progress = prev.taskAgentProgress;
+  // Find the agent entry that corresponds to this toolUseId by matching index
+  // Since agents are appended in order and tool_use entries are matched by toolUseId,
+  // we find the first 'running' agent to mark as completed.
+  let found = false;
+  const updatedAgents = progress.agents.map(agent => {
+    if (!found && agent.status === 'running') {
+      found = true;
+      return { ...agent, status: 'completed' as const };
+    }
+    return agent;
+  });
+  return {
+    total: progress.total,
+    completed: progress.completed + (found ? 1 : 0),
+    agents: updatedAgents,
+  };
 }
 
 export function processEvents(
@@ -42,6 +77,13 @@ export function processEvents(
         });
       } else if (event.entry.kind === 'tool_group' && event.entry.toolUseId) {
         processToolGroup(event.entry, setCurrentTask);
+      } else if (event.entry.kind === 'tool_use' && event.entry.toolName === 'Task') {
+        // Track new Task agent as running, and add entry normally
+        setCurrentTask(prev => {
+          if (!prev) return prev;
+          const updatedProgress = trackTaskAgentStarted(prev, event.entry);
+          return addEntryToState({ ...prev, streamingText: '', taskAgentProgress: updatedProgress }, event.entry);
+        });
       } else {
         // Normal entry: add and clear streaming text
         setCurrentTask(prev => {
@@ -91,10 +133,19 @@ function processToolGroup(entry: LogEntry, setCurrentTask: SetCurrentTask): void
       baseEntries = [...prev.entries, entry];
     }
 
+    // Track Task agent completion in progress tracker
+    let updatedProgress = prev.taskAgentProgress;
+    if (entry.toolName === 'Task' && entry.toolUseId) {
+      updatedProgress = trackTaskAgentCompleted(
+        { ...prev, taskAgentProgress: updatedProgress },
+        entry.toolUseId,
+      );
+    }
+
     // Try batch merge for batchable tools (Read/Grep/Glob)
     const batchResult = tryMergeBatch(baseEntries, entry);
     if (batchResult) {
-      return { ...prev, entries: batchResult, streamingText: '' };
+      return { ...prev, entries: batchResult, streamingText: '', taskAgentProgress: updatedProgress };
     }
 
     // Try task agents summary for consecutive Task tool_groups with stats
@@ -114,7 +165,7 @@ function processToolGroup(entry: LogEntry, setCurrentTask: SetCurrentTask): void
             timestamp: entry.timestamp,
           };
           updated.splice(newEntryIdx, 1); // Remove the individual entry
-          return { ...prev, entries: updated, streamingText: '' };
+          return { ...prev, entries: updated, streamingText: '', taskAgentProgress: updatedProgress };
         }
 
         if (prevEntry.kind === 'tool_group' && prevEntry.toolName === 'Task' && prevEntry.toolStats) {
@@ -127,11 +178,11 @@ function processToolGroup(entry: LogEntry, setCurrentTask: SetCurrentTask): void
             childEntries: [prevEntry, entry],
           };
           updated.splice(newEntryIdx, 1); // Remove the individual entry
-          return { ...prev, entries: updated, streamingText: '' };
+          return { ...prev, entries: updated, streamingText: '', taskAgentProgress: updatedProgress };
         }
       }
     }
 
-    return { ...prev, entries: baseEntries, streamingText: '' };
+    return { ...prev, entries: baseEntries, streamingText: '', taskAgentProgress: updatedProgress };
   });
 }

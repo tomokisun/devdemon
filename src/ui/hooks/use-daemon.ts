@@ -47,7 +47,7 @@ export function useDaemon(daemon: Daemon) {
       });
 
       stream.resetTokens();
-      setCurrentTask({ task, entries, streamingText: '', cycleStartedAt: Date.now(), currentTokens: 0 });
+      setCurrentTask({ task, entries, streamingText: '', cycleStartedAt: Date.now(), currentTokens: 0, taskAgentProgress: { total: 0, completed: 0, agents: [] } });
       setTaskLog(prev => [
         ...prev,
         {

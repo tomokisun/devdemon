@@ -99,6 +99,7 @@ function DaemonContent({ daemon, onQuit }: { daemon: Daemon; onQuit: () => void 
         isProcessing={status === 'running'}
         cycleStartedAt={currentTask?.cycleStartedAt}
         currentTokens={currentTask?.currentTokens ?? 0}
+        taskAgentProgress={currentTask?.taskAgentProgress}
       />
       <InputBar value={input} onChange={setInput} onSubmit={submit} />
       <StatusBar
@@ -147,6 +148,7 @@ function DaemonViewWithHeader({ daemon, onQuit }: { daemon: Daemon; onQuit: () =
         isProcessing={status === 'running'}
         cycleStartedAt={currentTask?.cycleStartedAt}
         currentTokens={currentTask?.currentTokens ?? 0}
+        taskAgentProgress={currentTask?.taskAgentProgress}
       />
       <InputBar value={input} onChange={setInput} onSubmit={submit} />
       <StatusBar
