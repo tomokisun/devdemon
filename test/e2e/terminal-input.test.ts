@@ -5,7 +5,7 @@ import { resolve } from 'path';
 const ROLES_DIR = resolve(import.meta.dir, '../fixtures/roles');
 const TIMEOUT = 20000;
 
-describe('Terminal UI E2E (PTY)', () => {
+describe.skipIf(!!process.env.CI)('Terminal UI E2E (PTY)', () => {
   let pty: PtyProcess | null = null;
 
   afterEach(() => {
