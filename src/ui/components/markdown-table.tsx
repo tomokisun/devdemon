@@ -44,7 +44,7 @@ export function extractTableLines(
  * Parse a single markdown table row into trimmed cell values.
  * Leading and trailing `|` are stripped.
  */
-function parseRow(line: string): ParsedRow {
+export function parseRow(line: string): ParsedRow {
   // Remove leading/trailing whitespace, then strip outer pipes
   const trimmed = line.trim();
   const inner = trimmed.startsWith('|') ? trimmed.slice(1) : trimmed;
