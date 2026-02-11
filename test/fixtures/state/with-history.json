@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "sessionId": "test-session-002",
+  "startedAt": "2026-01-01T00:00:00.000Z",
+  "currentRole": { "name": "SWE", "file": "/tmp/swe.md" },
+  "currentTask": null,
+  "taskHistory": [
+    {
+      "id": "task-001",
+      "type": "autonomous",
+      "prompt": "Find and fix bugs",
+      "result": "Fixed 2 bugs in auth module",
+      "status": "completed",
+      "startedAt": "2026-01-01T01:00:00.000Z",
+      "completedAt": "2026-01-01T01:05:00.000Z",
+      "durationMs": 300000,
+      "costUsd": 0.05,
+      "numTurns": 3
+    },
+    {
+      "id": "task-002",
+      "type": "user",
+      "prompt": "Add tests for UserService",
+      "result": "Added 5 test cases",
+      "status": "completed",
+      "startedAt": "2026-01-01T01:10:00.000Z",
+      "completedAt": "2026-01-01T01:15:00.000Z",
+      "durationMs": 300000,
+      "costUsd": 0.03,
+      "numTurns": 2
+    }
+  ],
+  "stats": {
+    "totalCycles": 2,
+    "totalCostUsd": 0.08,
+    "totalTasks": 2,
+    "userTasks": 1,
+    "autonomousTasks": 1,
+    "failedTasks": 0
+  },
+  "queue": []
+}

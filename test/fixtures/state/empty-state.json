@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sessionId": "test-session-001",
+  "startedAt": "2026-01-01T00:00:00.000Z",
+  "currentRole": { "name": "Test Role", "file": "/tmp/test-role.md" },
+  "currentTask": null,
+  "taskHistory": [],
+  "stats": {
+    "totalCycles": 0,
+    "totalCostUsd": 0,
+    "totalTasks": 0,
+    "userTasks": 0,
+    "autonomousTasks": 0,
+    "failedTasks": 0
+  },
+  "queue": []
+}

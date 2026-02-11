@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "sessionId": "test-session-003",
+  "startedAt": "2026-01-01T00:00:00.000Z",
+  "currentRole": { "name": "SWE", "file": "/tmp/swe.md" },
+  "currentTask": null,
+  "taskHistory": [],
+  "stats": {
+    "totalCycles": 0,
+    "totalCostUsd": 0,
+    "totalTasks": 0,
+    "userTasks": 0,
+    "autonomousTasks": 0,
+    "failedTasks": 0
+  },
+  "queue": [
+    {
+      "id": "queued-001",
+      "type": "user",
+      "prompt": "Fix the login bug",
+      "enqueuedAt": "2026-01-01T00:00:00.000Z",
+      "priority": 0
+    },
+    {
+      "id": "queued-002",
+      "type": "user",
+      "prompt": "Add error handling",
+      "enqueuedAt": "2026-01-01T00:01:00.000Z",
+      "priority": 0
+    }
+  ]
+}
