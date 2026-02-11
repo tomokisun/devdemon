@@ -1,8 +1,9 @@
 import { EventEmitter } from 'events';
-import { query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { RoleConfig } from '../roles/types.js';
 import type { DevDemonSettings } from '../settings/types.js';
 import { loadClaudeMd } from './claude-md-loader.js';
+import type { ClaudeMdOptions } from './claude-md-loader.js';
 
 export interface AgentResult {
   success: boolean;
@@ -17,22 +18,24 @@ export class Agent extends EventEmitter {
   private currentQuery: ReturnType<typeof query> | null = null;
   private repoPath: string;
   private settings: DevDemonSettings;
+  private claudeMdOptions?: ClaudeMdOptions;
 
-  constructor(repoPath: string, settings?: DevDemonSettings) {
+  constructor(repoPath: string, settings?: DevDemonSettings, claudeMdOptions?: ClaudeMdOptions) {
     super();
     this.repoPath = repoPath;
     this.settings = settings ?? {};
+    this.claudeMdOptions = claudeMdOptions;
   }
 
   async execute(prompt: string, role: RoleConfig): Promise<AgentResult> {
     const startTime = Date.now();
-    let result: SDKMessage | null = null;
+    let result: any = null;
 
     const languageInstruction = this.settings.language
       ? `\n\nIMPORTANT: Always respond in ${this.settings.language}. Use ${this.settings.language} for all explanations, comments, and communications.`
       : '';
 
-    const claudeMd = loadClaudeMd(this.repoPath);
+    const claudeMd = loadClaudeMd(this.repoPath, this.claudeMdOptions);
     const claudeMdInstruction = claudeMd.content
       ? `\n\n## CLAUDE.md Instructions\n\n${claudeMd.content}`
       : '';
@@ -73,7 +76,7 @@ export class Agent extends EventEmitter {
       costUsd: result?.total_cost_usd ?? 0,
       numTurns: result?.num_turns ?? 0,
       durationMs: Date.now() - startTime,
-      errors: result?.errors ?? [],
+      errors: result?.subtype === 'error' ? result.errors : [],
     };
   }
 

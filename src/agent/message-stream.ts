@@ -9,6 +9,9 @@ export type LogEntryKind =
   | 'tool_group'
   | 'tool_progress'
   | 'tool_use_summary'
+  | 'tool_batch'
+  | 'thinking_time'
+  | 'task_agents_summary'
   | 'system_init'
   | 'system_status'
   | 'system_hook'
@@ -27,6 +30,9 @@ export interface LogEntry {
   toolUseId?: string;
   toolInput?: Record<string, unknown>;
   resultLines?: string[];
+  batchedTools?: Array<{ toolName: string; count: number }>;
+  childEntries?: LogEntry[];
+  totalResultLines?: number;
   toolStats?: {
     totalToolUseCount?: number;
     totalTokens?: number;
@@ -291,13 +297,22 @@ export class MessageStream {
     if (typeof raw === 'string') {
       text = raw;
     } else if (raw.content) {
-      text = typeof raw.content === 'string' ? raw.content : JSON.stringify(raw.content);
+      if (typeof raw.content === 'string') {
+        text = raw.content;
+      } else if (Array.isArray(raw.content)) {
+        text = raw.content
+          .filter((c: any) => c.type === 'text')
+          .map((c: any) => c.text ?? '')
+          .join('\n');
+      } else {
+        text = JSON.stringify(raw.content);
+      }
     } else {
       text = JSON.stringify(raw);
     }
 
-    if (text.length > 200) {
-      text = text.slice(0, 200) + '...';
+    if (text.length > 500) {
+      text = text.slice(0, 500) + '...';
     }
 
     // Try to correlate with a pending tool_use to create a tool_group
@@ -312,9 +327,11 @@ export class MessageStream {
       const pending = this.pendingToolUse.get(toolUseId);
       if (pending) {
         const allLines = text.split('\n');
-        const resultLines = allLines.slice(0, 3);
-        if (allLines.length > 3) {
-          resultLines.push(`... (${allLines.length - 3} more lines)`);
+        const MAX_VISIBLE_LINES = 5;
+        const resultLines = allLines.slice(0, MAX_VISIBLE_LINES);
+        const totalResultLines = allLines.length;
+        if (allLines.length > MAX_VISIBLE_LINES) {
+          resultLines.push(`... +${allLines.length - MAX_VISIBLE_LINES} lines`);
         }
 
         // Extract sub-agent stats if present
@@ -345,6 +362,7 @@ export class MessageStream {
             toolUseId: pending.toolUseId,
             toolInput: pending.toolInput,
             resultLines,
+            totalResultLines,
             toolStats,
           },
         };

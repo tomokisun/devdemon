@@ -117,6 +117,95 @@ describe('InteractionLog', () => {
     expect(frame).toContain('streaming content...');
   });
 
+  test('tool_batchエントリが正しく表示される', () => {
+    const entries: LogEntry[] = [{
+      kind: 'tool_batch',
+      text: 'Searched for 2 patterns, read 3 files',
+      timestamp: Date.now(),
+      batchedTools: [
+        { toolName: 'Grep', count: 2 },
+        { toolName: 'Read', count: 3 },
+      ],
+    }];
+
+    const { lastFrame } = render(
+      <InteractionLog entries={entries} streamingText="" />
+    );
+
+    expect(lastFrame()).toContain('⏺');
+    expect(lastFrame()).toContain('Searched for 2 patterns, read 3 files');
+  });
+
+  test('thinking_timeエントリがmagentaで表示される', () => {
+    const entries: LogEntry[] = [{
+      kind: 'thinking_time',
+      text: 'Cooked for 2m 15s',
+      timestamp: Date.now(),
+    }];
+
+    const { lastFrame } = render(
+      <InteractionLog entries={entries} streamingText="" />
+    );
+
+    expect(lastFrame()).toContain('✻');
+    expect(lastFrame()).toContain('Cooked for 2m 15s');
+  });
+
+  test('task_agents_summaryがツリー構造で表示される', () => {
+    const entries: LogEntry[] = [{
+      kind: 'task_agents_summary',
+      text: '2 Task agents finished',
+      timestamp: Date.now(),
+      childEntries: [
+        {
+          kind: 'tool_group',
+          text: 'Task(Fix auth)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolStats: { totalToolUseCount: 3, totalTokens: 19100 },
+        },
+        {
+          kind: 'tool_group',
+          text: 'Task(Update tests)',
+          timestamp: Date.now(),
+          toolName: 'Task',
+          toolStats: { totalToolUseCount: 4, totalTokens: 20600 },
+        },
+      ],
+    }];
+
+    const { lastFrame } = render(
+      <InteractionLog entries={entries} streamingText="" />
+    );
+
+    expect(lastFrame()).toContain('2 Task agents finished');
+    expect(lastFrame()).toContain('├─');
+    expect(lastFrame()).toContain('└─');
+    expect(lastFrame()).toContain('Done');
+  });
+
+  test('スピナーがtool_group後に表示される', () => {
+    const entries: LogEntry[] = [{
+      kind: 'tool_group',
+      text: 'Read(src/app.tsx)',
+      timestamp: Date.now(),
+      toolName: 'Read',
+      resultLines: ['import React...'],
+    }];
+
+    const { lastFrame } = render(
+      <InteractionLog
+        entries={entries}
+        streamingText=""
+        isProcessing={true}
+        cycleStartedAt={Date.now() - 5000}
+      />
+    );
+
+    expect(lastFrame()).toContain('✶');
+    expect(lastFrame()).toContain('Processing...');
+  });
+
   test('複数種類のエントリが正しい順序で表示される', () => {
     const entries: LogEntry[] = [
       makeEntry({ kind: 'assistant_text', text: 'Analyzing code' }),

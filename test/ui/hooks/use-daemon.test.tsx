@@ -231,6 +231,126 @@ describe('useDaemon', () => {
     expect(daemon.agent.listenerCount('message')).toBe(0);
   });
 
+  test('連続するRead tool_groupがtool_batchにまとまる', async () => {
+    const daemon = createMockDaemon();
+    capturedState = null;
+    render(React.createElement(HookCapture, { daemon }));
+
+    const task = createTestTask();
+    daemon.emit('cycle-start', task);
+    await new Promise(r => setTimeout(r, 50));
+
+    // First Read tool_use
+    daemon.agent.emit('message', {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', id: 'tu-read-1', name: 'Read', input: { file_path: '/a.ts' } }],
+      },
+    });
+    await new Promise(r => setTimeout(r, 50));
+
+    // First Read result
+    daemon.agent.emit('message', {
+      type: 'user',
+      tool_use_result: 'file contents a',
+      message: { content: [{ type: 'tool_result', tool_use_id: 'tu-read-1' }] },
+    });
+    await new Promise(r => setTimeout(r, 50));
+
+    // Second Read tool_use
+    daemon.agent.emit('message', {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', id: 'tu-read-2', name: 'Read', input: { file_path: '/b.ts' } }],
+      },
+    });
+    await new Promise(r => setTimeout(r, 50));
+
+    // Second Read result
+    daemon.agent.emit('message', {
+      type: 'user',
+      tool_use_result: 'file contents b',
+      message: { content: [{ type: 'tool_result', tool_use_id: 'tu-read-2' }] },
+    });
+    await new Promise(r => setTimeout(r, 50));
+
+    // Find the tool_batch entry
+    const batchEntry = capturedState!.currentTask!.entries.find(e => e.kind === 'tool_batch');
+    expect(batchEntry).toBeDefined();
+    expect(batchEntry!.text).toMatch(/read 2 file/);
+  });
+
+  test('cycle-completeで思考時間マーカーが追加される', async () => {
+    const daemon = createMockDaemon();
+    capturedState = null;
+    render(React.createElement(HookCapture, { daemon }));
+
+    const task = createTestTask();
+    daemon.emit('cycle-start', task);
+    await new Promise(r => setTimeout(r, 50));
+
+    daemon.emit('cycle-complete', {
+      task,
+      result: { success: true, costUsd: 0.05, numTurns: 3, durationMs: 12000 },
+    });
+    // Wait for entries to be added but before the setTimeout(100) clears state
+    await new Promise(r => setTimeout(r, 50));
+
+    const thinkingEntry = capturedState!.currentTask!.entries.find(e => e.kind === 'thinking_time');
+    expect(thinkingEntry).toBeDefined();
+    expect(thinkingEntry!.text).toMatch(/\w+ for \d+/);
+  });
+
+  test('連続するTask tool_groupがtask_agents_summaryにまとまる', async () => {
+    const daemon = createMockDaemon();
+    capturedState = null;
+    render(React.createElement(HookCapture, { daemon }));
+
+    const task = createTestTask();
+    daemon.emit('cycle-start', task);
+    await new Promise(r => setTimeout(r, 100));
+
+    // First Task tool_use
+    daemon.agent.emit('message', {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', id: 'tu-task-1', name: 'Task', input: { description: 'Fix auth' } }],
+      },
+    });
+    await new Promise(r => setTimeout(r, 100));
+
+    // First Task result with stats (object form so MessageStream extracts toolStats)
+    daemon.agent.emit('message', {
+      type: 'user',
+      tool_use_result: { content: 'Done', totalToolUseCount: 3, totalTokens: 19100 },
+      message: { content: [{ type: 'tool_result', tool_use_id: 'tu-task-1' }] },
+    });
+    await new Promise(r => setTimeout(r, 100));
+
+    // Second Task tool_use
+    daemon.agent.emit('message', {
+      type: 'assistant',
+      message: {
+        content: [{ type: 'tool_use', id: 'tu-task-2', name: 'Task', input: { description: 'Update tests' } }],
+      },
+    });
+    await new Promise(r => setTimeout(r, 100));
+
+    // Second Task result with stats
+    daemon.agent.emit('message', {
+      type: 'user',
+      tool_use_result: { content: 'Done', totalToolUseCount: 4, totalTokens: 20600 },
+      message: { content: [{ type: 'tool_result', tool_use_id: 'tu-task-2' }] },
+    });
+    await new Promise(r => setTimeout(r, 100));
+
+    // Find the task_agents_summary entry
+    const summaryEntry = capturedState!.currentTask!.entries.find(e => e.kind === 'task_agents_summary');
+    expect(summaryEntry).toBeDefined();
+    expect(summaryEntry!.childEntries).toHaveLength(2);
+    expect(summaryEntry!.text).toContain('2 Task agents finished');
+  });
+
   test('cycle-completeでstatsが再取得される', async () => {
     const daemon = createMockDaemon();
     capturedState = null;

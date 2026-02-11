@@ -32,6 +32,9 @@ const STYLE_MAP: Record<LogEntryKind, StyleDef> = {
   tool_progress:    { prefix: '⏳ ',  color: 'yellow',  dim: false, bold: false },
   tool_use_summary: { prefix: '📋 ',  color: 'cyan',    dim: true,  bold: false },
   tool_group:       { prefix: '⏺ ',  color: 'cyan',    dim: false, bold: false },
+  tool_batch:          { prefix: '⏺ ',  color: 'cyan',    dim: true,  bold: false },
+  thinking_time:       { prefix: '✻ ',  color: 'magenta', dim: false, bold: false },
+  task_agents_summary: { prefix: '⏺ ',  color: 'cyan',    dim: false, bold: false },
   system_init:      { prefix: '⚡ ',  color: 'green',   dim: false, bold: false },
   system_status:    { prefix: '● ',   color: 'yellow',  dim: false, bold: false },
   system_hook:      { prefix: '🪝 ',  color: 'yellow',  dim: true,  bold: false },
@@ -110,7 +113,12 @@ function InteractionLogInner({
   const lastEntry = entries[entries.length - 1];
   const showSpinner = isProcessing && (
     entries.length === 0 ||
-    (lastEntry && (lastEntry.kind === 'tool_use' || lastEntry.kind === 'user_task'))
+    (lastEntry && (
+      lastEntry.kind === 'tool_use' ||
+      lastEntry.kind === 'tool_group' ||
+      lastEntry.kind === 'tool_batch' ||
+      lastEntry.kind === 'user_task'
+    ))
   );
 
   return (
@@ -145,6 +153,59 @@ function InteractionLogInner({
                   ))}
                 </Box>
               ) : null}
+            </Box>
+          );
+        }
+
+        // tool_batch: grouped consecutive tool calls
+        if (entry.kind === 'tool_batch') {
+          return (
+            <Box key={i}>
+              <Text color="cyan" dimColor>{'⏺ '}</Text>
+              <Text color="cyan" dimColor>{truncateLine(entry.text)}</Text>
+            </Box>
+          );
+        }
+
+        // thinking_time: "✻ Baked for 3m 34s"
+        if (entry.kind === 'thinking_time') {
+          return (
+            <Box key={i}>
+              <Text color="magenta">{'✻ '}</Text>
+              <Text color="magenta">{entry.text}</Text>
+            </Box>
+          );
+        }
+
+        // task_agents_summary: tree view of completed tasks
+        if (entry.kind === 'task_agents_summary' && entry.childEntries) {
+          const children = entry.childEntries;
+          return (
+            <Box key={i} flexDirection="column">
+              <Box>
+                <Text color="cyan">{'⏺ '}</Text>
+                <Text color="cyan">{entry.text}</Text>
+              </Box>
+              {children.map((child, j) => {
+                const isLast = j === children.length - 1;
+                const prefix = isLast ? '   └─ ' : '   ├─ ';
+                const stats = child.toolStats;
+                const statText = stats
+                  ? ` · ${stats.totalToolUseCount ?? 0} tool uses · ${formatTokens(stats.totalTokens ?? 0)}`
+                  : '';
+                return (
+                  <Box key={j} flexDirection="column">
+                    <Box>
+                      <Text dimColor>{prefix}</Text>
+                      <Text>{truncateLine(child.text)}{statText}</Text>
+                    </Box>
+                    <Box>
+                      <Text dimColor>{isLast ? '      ⎿  ' : '   │  ⎿  '}</Text>
+                      <Text dimColor>Done</Text>
+                    </Box>
+                  </Box>
+                );
+              })}
             </Box>
           );
         }
@@ -199,8 +260,8 @@ function InteractionLogInner({
 
       {showSpinner ? (
         <Box>
-          <Text color="yellow">{'⏳ '}</Text>
-          <Text color="yellow">{`Processing... (${elapsed}s)`}</Text>
+          <Text color="cyan">{'✶ '}</Text>
+          <Text color="cyan">{`Processing... (${elapsed}s)`}</Text>
         </Box>
       ) : null}
     </Box>

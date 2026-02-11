@@ -341,14 +341,14 @@ describe('MessageStream', () => {
       expect(event.entry.text).toBe('File contents here');
     });
 
-    test('長いtool_use_resultを200文字に切り詰める', () => {
-      const longResult = 'x'.repeat(300);
+    test('長いtool_use_resultを500文字に切り詰める', () => {
+      const longResult = 'x'.repeat(600);
       const event = stream.processMessage({
         type: 'user',
         tool_use_result: longResult,
       }) as { type: 'log'; entry: LogEntry };
 
-      expect(event.entry.text.length).toBe(203); // 200 + '...'
+      expect(event.entry.text.length).toBe(503); // 500 + '...'
       expect(event.entry.text.endsWith('...')).toBe(true);
     });
 
@@ -367,6 +367,76 @@ describe('MessageStream', () => {
         type: 'user',
       });
       expect(result).toBeNull();
+    });
+
+    test('配列contentからtextブロックのみ抽出する', () => {
+      // First create a pending tool_use
+      stream.processMessage({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', id: 'tu_array', name: 'Read', input: { file_path: '/test.ts' } }] },
+      });
+
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: {
+          content: [
+            { type: 'text', text: 'First line' },
+            { type: 'image', source: { data: 'base64...' } },
+            { type: 'text', text: 'Second line' },
+          ],
+        },
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_array' }] },
+      });
+
+      expect(result).not.toBeNull();
+      const event = result as any;
+      expect(event.type).toBe('log');
+      // The text should be joined from the two text blocks
+      expect(event.entry.resultLines).toBeDefined();
+      expect(event.entry.resultLines![0]).toBe('First line');
+      expect(event.entry.resultLines![1]).toBe('Second line');
+    });
+
+    test('tool_groupにtotalResultLinesが含まれる', () => {
+      // Create pending tool_use
+      stream.processMessage({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', id: 'tu_lines', name: 'Read', input: { file_path: '/test.ts' } }] },
+      });
+
+      // Create a result with 10 lines
+      const lines = Array.from({ length: 10 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: lines,
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_lines' }] },
+      });
+
+      const event = result as any;
+      expect(event.type).toBe('log');
+      expect(event.entry.kind).toBe('tool_group');
+      expect(event.entry.totalResultLines).toBe(10);
+      // Should show 5 lines + "... +5 lines"
+      expect(event.entry.resultLines).toHaveLength(6);
+      expect(event.entry.resultLines![5]).toBe('... +5 lines');
+    });
+
+    test('5行以内のresultLinesには+N linesが付かない', () => {
+      stream.processMessage({
+        type: 'assistant',
+        message: { content: [{ type: 'tool_use', id: 'tu_short', name: 'Read', input: { file_path: '/test.ts' } }] },
+      });
+
+      const lines = Array.from({ length: 3 }, (_, i) => `Line ${i + 1}`).join('\n');
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: lines,
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_short' }] },
+      });
+
+      const event = result as any;
+      expect(event.entry.resultLines).toHaveLength(3);
+      expect(event.entry.totalResultLines).toBe(3);
     });
   });
 

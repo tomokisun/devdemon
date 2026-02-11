@@ -32,6 +32,106 @@ function formatMs(ms: number): string {
   return `${Math.round(ms / 1000)}s`;
 }
 
+const BATCHABLE_TOOLS = new Set(['Read', 'Grep', 'Glob']);
+
+const TOOL_BATCH_VERBS: Record<string, string> = {
+  Read: 'read',
+  Grep: 'searched for',
+  Glob: 'searched for',
+};
+
+const TOOL_BATCH_NOUNS: Record<string, string> = {
+  Read: 'file',
+  Grep: 'pattern',
+  Glob: 'pattern',
+};
+
+function formatBatchText(tools: Array<{ toolName: string; count: number }>): string {
+  // Group searches first, then reads
+  const searches = tools.filter(t => t.toolName === 'Grep' || t.toolName === 'Glob');
+  const reads = tools.filter(t => t.toolName === 'Read');
+  const others = tools.filter(t => !['Grep', 'Glob', 'Read'].includes(t.toolName));
+
+  const parts: string[] = [];
+
+  if (searches.length > 0) {
+    const totalSearches = searches.reduce((sum, s) => sum + s.count, 0);
+    parts.push(`Searched for ${totalSearches} pattern${totalSearches !== 1 ? 's' : ''}`);
+  }
+  if (reads.length > 0) {
+    const totalReads = reads.reduce((sum, r) => sum + r.count, 0);
+    parts.push(`read ${totalReads} file${totalReads !== 1 ? 's' : ''}`);
+  }
+  for (const t of others) {
+    const verb = TOOL_BATCH_VERBS[t.toolName] ?? t.toolName.toLowerCase();
+    const noun = TOOL_BATCH_NOUNS[t.toolName] ?? 'item';
+    parts.push(`${verb} ${t.count} ${noun}${t.count !== 1 ? 's' : ''}`);
+  }
+
+  return parts.join(', ');
+}
+
+function tryMergeBatch(entries: LogEntry[], newEntry: LogEntry): LogEntry[] | null {
+  if (newEntry.kind !== 'tool_group' || !newEntry.toolName) return null;
+  if (!BATCHABLE_TOOLS.has(newEntry.toolName)) return null;
+
+  const lastIdx = entries.length - 1;
+  if (lastIdx < 0) return null;
+  const last = entries[lastIdx];
+
+  // If last is already a tool_batch, extend it
+  if (last.kind === 'tool_batch' && last.batchedTools) {
+    const batchedTools = last.batchedTools.map(b => ({ ...b }));
+    const existing = batchedTools.find(b => b.toolName === newEntry.toolName);
+    if (existing) {
+      existing.count++;
+    } else {
+      batchedTools.push({ toolName: newEntry.toolName!, count: 1 });
+    }
+    const updated = [...entries];
+    updated[lastIdx] = {
+      ...last,
+      text: formatBatchText(batchedTools),
+      timestamp: newEntry.timestamp,
+      batchedTools,
+    };
+    return updated;
+  }
+
+  // If last is a batchable tool_group, convert both into a tool_batch
+  if (last.kind === 'tool_group' && last.toolName && BATCHABLE_TOOLS.has(last.toolName)) {
+    const batchedTools: Array<{ toolName: string; count: number }> = [];
+    batchedTools.push({ toolName: last.toolName!, count: 1 });
+
+    const existing = batchedTools.find(b => b.toolName === newEntry.toolName);
+    if (existing) {
+      existing.count++;
+    } else {
+      batchedTools.push({ toolName: newEntry.toolName!, count: 1 });
+    }
+
+    const updated = [...entries];
+    updated[lastIdx] = {
+      kind: 'tool_batch',
+      text: formatBatchText(batchedTools),
+      timestamp: newEntry.timestamp,
+      batchedTools,
+    };
+    return updated;
+  }
+
+  return null;
+}
+
+const THINKING_VERBS = [
+  'Baked', 'Cooked', 'Churned', 'Cogitated', 'Worked',
+  'Mulled', 'Pondered', 'Brewed', 'Stewed', 'Crafted',
+];
+
+function randomThinkingVerb(): string {
+  return THINKING_VERBS[Math.floor(Math.random() * THINKING_VERBS.length)];
+}
+
 export function useDaemon(daemon: Daemon) {
   const [status, setStatus] = useState<'idle' | 'running' | 'waiting'>('idle');
   const [currentTask, setCurrentTask] = useState<CurrentTaskState | null>(null);
@@ -128,17 +228,63 @@ export function useDaemon(daemon: Daemon) {
               const toolUseIdx = prev.entries.findLastIndex(
                 e => e.kind === 'tool_use' && e.toolUseId === event.entry.toolUseId
               );
+
+              let baseEntries: LogEntry[];
               if (toolUseIdx >= 0) {
                 // Filter out tool_progress for same toolUseId, then replace the tool_use
                 const filtered = prev.entries.filter(
                   (e, i) => i === toolUseIdx || !(e.kind === 'tool_progress' && e.toolUseId === event.entry.toolUseId)
                 );
                 const newIdx = filtered.indexOf(prev.entries[toolUseIdx]);
-                const updated = [...filtered];
-                updated[newIdx] = event.entry;
-                return { ...prev, entries: updated, streamingText: '' };
+                baseEntries = [...filtered];
+                baseEntries[newIdx] = event.entry;
+              } else {
+                baseEntries = [...prev.entries, event.entry];
               }
-              return addEntryToState({ ...prev, streamingText: '' }, event.entry);
+
+              // Try batch merge for batchable tools (Read/Grep/Glob)
+              const batchResult = tryMergeBatch(baseEntries, event.entry);
+              if (batchResult) {
+                return { ...prev, entries: batchResult, streamingText: '' };
+              }
+
+              // Try task agents summary for consecutive Task tool_groups with stats
+              if (event.entry.toolName === 'Task' && event.entry.toolStats) {
+                const lastIdx = baseEntries.length - 1;
+                // The new entry was already placed at some index, find it
+                const newEntryIdx = baseEntries.findLastIndex(e => e === event.entry);
+                if (newEntryIdx > 0) {
+                  const prevEntry = baseEntries[newEntryIdx - 1];
+
+                  if (prevEntry.kind === 'task_agents_summary' && prevEntry.childEntries) {
+                    // Extend existing summary
+                    const updated = [...baseEntries];
+                    updated[newEntryIdx - 1] = {
+                      ...prevEntry,
+                      childEntries: [...prevEntry.childEntries, event.entry],
+                      text: `${prevEntry.childEntries.length + 1} Task agents finished`,
+                      timestamp: event.entry.timestamp,
+                    };
+                    updated.splice(newEntryIdx, 1); // Remove the individual entry
+                    return { ...prev, entries: updated, streamingText: '' };
+                  }
+
+                  if (prevEntry.kind === 'tool_group' && prevEntry.toolName === 'Task' && prevEntry.toolStats) {
+                    // Combine two Task tool_groups into a summary
+                    const updated = [...baseEntries];
+                    updated[newEntryIdx - 1] = {
+                      kind: 'task_agents_summary',
+                      text: '2 Task agents finished',
+                      timestamp: event.entry.timestamp,
+                      childEntries: [prevEntry, event.entry],
+                    };
+                    updated.splice(newEntryIdx, 1); // Remove the individual entry
+                    return { ...prev, entries: updated, streamingText: '' };
+                  }
+                }
+              }
+
+              return { ...prev, entries: baseEntries, streamingText: '' };
             });
           } else {
             // Normal entry: add and clear streaming text
@@ -165,15 +311,24 @@ export function useDaemon(daemon: Daemon) {
     };
 
     const onCycleComplete = ({ task, result }: { task: Task; result: AgentResult }) => {
-      // Add completion summary entry
+      const thinkingVerb = randomThinkingVerb();
+      const thinkingEntry: LogEntry = {
+        kind: 'thinking_time',
+        text: `${thinkingVerb} for ${formatMs(result.durationMs)}`,
+        timestamp: Date.now(),
+      };
+
       const summaryEntry: LogEntry = {
         kind: 'result_success',
         text: `Completed ($${result.costUsd.toFixed(2)} \u00B7 ${result.numTurns} turn${result.numTurns !== 1 ? 's' : ''} \u00B7 ${formatMs(result.durationMs)})`,
         timestamp: Date.now(),
       };
+
       setCurrentTask(prev => {
         if (!prev) return prev;
-        return addEntryToState(prev, summaryEntry);
+        let state = addEntryToState(prev, thinkingEntry);
+        state = addEntryToState(state, summaryEntry);
+        return state;
       });
 
       // Delay clearing so the summary is visible
