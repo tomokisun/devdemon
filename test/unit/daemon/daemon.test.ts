@@ -830,4 +830,117 @@ describe('Daemon', () => {
       expect(elapsed).toBeLessThan(2000);
     });
   });
+
+  describe('queue-aware interval', () => {
+    it('skips interval when queue has remaining tasks', async () => {
+      const agent = createMockAgent();
+      const queue = createMockQueue();
+      const state = createMockState();
+      const promptBuilder = createMockPromptBuilder();
+      const role = createTestRole({ frontmatter: { interval: 1 } }); // 1 second interval
+
+      const tasks = [
+        createTestTask({ id: 'task-1', prompt: 'First task' }),
+        createTestTask({ id: 'task-2', prompt: 'Second task' }),
+      ];
+      let dequeueCount = 0;
+      let remainingLength = 2;
+
+      queue.dequeue = mock(() => {
+        dequeueCount++;
+        if (dequeueCount <= 2) {
+          remainingLength--;
+          return tasks[dequeueCount - 1];
+        }
+        return null;
+      });
+
+      Object.defineProperty(queue, 'length', {
+        get: () => remainingLength,
+        configurable: true,
+      });
+
+      let cycleCount = 0;
+      let daemon: Daemon;
+      agent.execute = mock(() => {
+        cycleCount++;
+        if (cycleCount >= 3) {
+          setTimeout(() => daemon.stop(), 0);
+        }
+        return Promise.resolve({
+          success: true,
+          result: 'Done',
+          costUsd: 0.01,
+          numTurns: 1,
+          durationMs: 0,
+          errors: [],
+        });
+      });
+
+      daemon = new Daemon({
+        role,
+        repoPath: '/test/repo',
+        agent: agent as any,
+        queue: queue as any,
+        state: state as any,
+        promptBuilder: promptBuilder as any,
+      });
+
+      const startTime = Date.now();
+      await daemon.start();
+      const elapsed = Date.now() - startTime;
+
+      // With 1 second interval, if we waited for all 3 cycles, it'd be ~3s.
+      // With queue skipping, only the last cycle should wait, so it should be ~1s or less.
+      expect(elapsed).toBeLessThan(2000);
+      expect(cycleCount).toBeGreaterThanOrEqual(3);
+    });
+
+    it('waits for interval when queue is empty', async () => {
+      const agent = createMockAgent();
+      const queue = createMockQueue();
+      const state = createMockState();
+      const promptBuilder = createMockPromptBuilder();
+      const role = createTestRole({ frontmatter: { interval: 0.05 } }); // 50ms
+
+      // Queue is always empty (dequeue returns null, length stays 0)
+
+      let cycleCount = 0;
+      const cycleTimes: number[] = [];
+      let daemon: Daemon;
+
+      agent.execute = mock(() => {
+        cycleCount++;
+        cycleTimes.push(Date.now());
+        if (cycleCount >= 2) {
+          setTimeout(() => daemon.stop(), 0);
+        }
+        return Promise.resolve({
+          success: true,
+          result: 'Done',
+          costUsd: 0.01,
+          numTurns: 1,
+          durationMs: 0,
+          errors: [],
+        });
+      });
+
+      daemon = new Daemon({
+        role,
+        repoPath: '/test/repo',
+        agent: agent as any,
+        queue: queue as any,
+        state: state as any,
+        promptBuilder: promptBuilder as any,
+      });
+
+      await daemon.start();
+
+      if (cycleTimes.length >= 2) {
+        const gap = cycleTimes[1] - cycleTimes[0];
+        // Should have waited at least ~50ms between cycles (allow some timing imprecision)
+        expect(gap).toBeGreaterThanOrEqual(30);
+      }
+    });
+  });
 });

@@ -54,7 +54,7 @@ export class Daemon extends EventEmitter {
 
     while (this.running) {
       await this.executeCycle();
-      if (this.running) {
+      if (this.running && this.queue.length === 0) {
         await this.wait(this.role.frontmatter.interval);
       }
     }

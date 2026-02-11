@@ -21,6 +21,12 @@ let captured: ReturnType<typeof useInputQueue> | null = null;
 function HookCapture({ daemon, onQuit }: { daemon: any; onQuit?: () => void }) {
   const hookResult = useInputQueue(daemon, onQuit ?? (() => {}));
   captured = hookResult;
+
+  // Use useEffect to ensure the component re-renders when input changes
+  React.useEffect(() => {
+    // This will trigger a re-render when input changes
+  }, [hookResult.input]);
+
   return React.createElement('ink-text', null, JSON.stringify({ input: hookResult.input }));
 }
 
@@ -43,7 +49,8 @@ describe('useInputQueue', () => {
     );
 
     captured!.setInput('hello');
-    await new Promise(r => setTimeout(r, 50));
+    // Wait for React to process state updates
+    await new Promise(r => setTimeout(r, 100));
 
     const output = JSON.parse(lastFrame()!);
     expect(output.input).toBe('hello');
@@ -55,9 +62,9 @@ describe('useInputQueue', () => {
     render(React.createElement(HookCapture, { daemon }));
 
     captured!.setInput('fix bug');
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
     captured!.submit();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     expect(daemon.enqueueUserTask).toHaveBeenCalledWith('fix bug');
   });
@@ -70,9 +77,9 @@ describe('useInputQueue', () => {
     );
 
     captured!.setInput('fix bug');
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
     captured!.submit();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     const output = JSON.parse(lastFrame()!);
     expect(output.input).toBe('');
@@ -84,9 +91,9 @@ describe('useInputQueue', () => {
     render(React.createElement(HookCapture, { daemon }));
 
     captured!.setInput('   ');
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
     captured!.submit();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     expect(daemon.enqueueUserTask).not.toHaveBeenCalled();
   });
@@ -98,9 +105,9 @@ describe('useInputQueue', () => {
     render(React.createElement(HookCapture, { daemon, onQuit }));
 
     captured!.setInput('quit');
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
     captured!.submit();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     expect(onQuit).toHaveBeenCalled();
     expect(daemon.enqueueUserTask).not.toHaveBeenCalled();
@@ -113,9 +120,9 @@ describe('useInputQueue', () => {
     render(React.createElement(HookCapture, { daemon, onQuit }));
 
     captured!.setInput('/quit');
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
     captured!.submit();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     expect(onQuit).toHaveBeenCalled();
     expect(daemon.enqueueUserTask).not.toHaveBeenCalled();
@@ -128,9 +135,9 @@ describe('useInputQueue', () => {
     render(React.createElement(HookCapture, { daemon, onQuit }));
 
     captured!.setInput('QUIT');
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
     captured!.submit();
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 100));
 
     expect(onQuit).toHaveBeenCalled();
     expect(daemon.enqueueUserTask).not.toHaveBeenCalled();

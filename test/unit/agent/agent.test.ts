@@ -6,6 +6,10 @@ describe('Agent', () => {
   beforeEach(() => {
     // Reset module mocks before each test
     mock.restore();
+    // Default: mock claude-md-loader to return empty so real ~/.claude/CLAUDE.md doesn't affect tests
+    mock.module('../../../src/agent/claude-md-loader.js', () => ({
+      loadClaudeMd: () => ({ content: '', loadedPaths: [] }),
+    }));
   });
 
   describe('execute()', () => {
@@ -303,6 +307,109 @@ describe('Agent', () => {
       // model should be the default 'claude-opus-4-20250514' from agent.ts, not from settings
       // The settings.model spread should not add an extra model key
       expect(capturedArgs.options.model).toBe('claude-opus-4-20250514');
+    });
+
+    test('systemPromptにCLAUDE.mdの内容がappendされる', async () => {
+      const successResult = createSuccessResult();
+      let capturedArgs: any = null;
+
+      mock.module('../../../src/agent/claude-md-loader.js', () => ({
+        loadClaudeMd: () => ({
+          content: '# Project Rules\nAlways use TypeScript.',
+          loadedPaths: ['/test/repo/CLAUDE.md'],
+        }),
+      }));
+
+      mock.module('@anthropic-ai/claude-agent-sdk', () => ({
+        query: (...args: any[]) => {
+          capturedArgs = args[0];
+          return {
+            async *[Symbol.asyncIterator]() {
+              yield successResult;
+            },
+            interrupt: mock(() => Promise.resolve()),
+          };
+        },
+      }));
+
+      const { Agent } = await import('../../../src/agent/agent.js');
+      const agent = new Agent('/test/repo');
+      const role = createTestRole({ body: 'You are a test role.' });
+
+      await agent.execute('Do something', role);
+
+      expect(capturedArgs.options.systemPrompt.append).toContain('You are a test role.');
+      expect(capturedArgs.options.systemPrompt.append).toContain('## CLAUDE.md Instructions');
+      expect(capturedArgs.options.systemPrompt.append).toContain('Always use TypeScript.');
+    });
+
+    test('CLAUDE.mdが存在しない場合、appendにCLAUDE.mdセクションが含まれない', async () => {
+      const successResult = createSuccessResult();
+      let capturedArgs: any = null;
+
+      mock.module('../../../src/agent/claude-md-loader.js', () => ({
+        loadClaudeMd: () => ({ content: '', loadedPaths: [] }),
+      }));
+
+      mock.module('@anthropic-ai/claude-agent-sdk', () => ({
+        query: (...args: any[]) => {
+          capturedArgs = args[0];
+          return {
+            async *[Symbol.asyncIterator]() {
+              yield successResult;
+            },
+            interrupt: mock(() => Promise.resolve()),
+          };
+        },
+      }));
+
+      const { Agent } = await import('../../../src/agent/agent.js');
+      const agent = new Agent('/test/repo');
+      const role = createTestRole({ body: 'You are a code reviewer.' });
+
+      await agent.execute('Review code', role);
+
+      expect(capturedArgs.options.systemPrompt.append).toBe('You are a code reviewer.');
+      expect(capturedArgs.options.systemPrompt.append).not.toContain('CLAUDE.md');
+    });
+
+    test('appendの順序がrole.body → CLAUDE.md → languageの順になる', async () => {
+      const successResult = createSuccessResult();
+      let capturedArgs: any = null;
+
+      mock.module('../../../src/agent/claude-md-loader.js', () => ({
+        loadClaudeMd: () => ({
+          content: 'CLAUDE_MD_CONTENT',
+          loadedPaths: ['/test/repo/CLAUDE.md'],
+        }),
+      }));
+
+      mock.module('@anthropic-ai/claude-agent-sdk', () => ({
+        query: (...args: any[]) => {
+          capturedArgs = args[0];
+          return {
+            async *[Symbol.asyncIterator]() {
+              yield successResult;
+            },
+            interrupt: mock(() => Promise.resolve()),
+          };
+        },
+      }));
+
+      const { Agent } = await import('../../../src/agent/agent.js');
+      const agent = new Agent('/test/repo', { language: 'Japanese' });
+      const role = createTestRole({ body: 'ROLE_BODY' });
+
+      await agent.execute('Do something', role);
+
+      const append = capturedArgs.options.systemPrompt.append;
+      const roleIdx = append.indexOf('ROLE_BODY');
+      const claudeIdx = append.indexOf('CLAUDE_MD_CONTENT');
+      const langIdx = append.indexOf('Japanese');
+
+      expect(roleIdx).toBeGreaterThanOrEqual(0);
+      expect(claudeIdx).toBeGreaterThan(roleIdx);
+      expect(langIdx).toBeGreaterThan(claudeIdx);
     });
   });
 
