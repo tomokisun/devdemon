@@ -8,7 +8,10 @@ Requires [Bun](https://bun.sh).
 
 ```sh
 bun install
+bun link
 ```
+
+`bun link` registers the `devdemon` command globally so you can run it from anywhere.
 
 ## Usage
 

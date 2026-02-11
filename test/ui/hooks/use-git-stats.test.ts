@@ -76,7 +76,7 @@ describe('useGitStats hook', () => {
     capturedStats = null;
     // Use the project root which is a git repo
     const { unmount } = render(
-      React.createElement(HookCapture, { repoPath: '/Users/tomoki_sun/github.com/tomokisun/devdemon' })
+      React.createElement(HookCapture, { repoPath: process.cwd() })
     );
 
     await new Promise(r => setTimeout(r, 200));
@@ -108,7 +108,7 @@ describe('useGitStats hook', () => {
   test('cleans up interval on unmount', async () => {
     capturedStats = null;
     const { unmount } = render(
-      React.createElement(HookCapture, { repoPath: '/Users/tomoki_sun/github.com/tomokisun/devdemon' })
+      React.createElement(HookCapture, { repoPath: process.cwd() })
     );
 
     await new Promise(r => setTimeout(r, 100));
