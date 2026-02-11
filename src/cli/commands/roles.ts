@@ -1,6 +1,11 @@
 import { Command } from 'commander';
 import { resolveRolesDir, loadAllRoles } from '../../roles/loader.js';
+import { promptRoleFrontmatter } from '../prompts/role-prompts.js';
+import { generateRoleBody } from '../generators/role-body-generator.js';
+import { writeRole } from '../../roles/writer.js';
+import { validateFrontmatter } from '../../roles/validator.js';
 import type { RoleConfig } from '../../roles/types.js';
+import type { RlFactory } from '../prompts/role-prompts.js';
 
 interface RolesOptions {
   rolesDir?: string;
@@ -48,6 +53,29 @@ function showRoleDetail(role: RoleConfig): void {
   console.log(role.body);
 }
 
+export async function createRoleAction(
+  name: string,
+  opts: { rolesDir?: string },
+  rlFactory?: RlFactory,
+): Promise<void> {
+  console.log(`\nCreating role: ${name}\n`);
+
+  // Step 1: Interactive prompts
+  const rawFrontmatter = await promptRoleFrontmatter({ rlFactory });
+
+  // Step 2: Validate with Zod
+  const frontmatter = validateFrontmatter({ ...rawFrontmatter, name });
+
+  // Step 3: Generate body via Claude API
+  console.log('\nGenerating role body...');
+  const body = await generateRoleBody({ frontmatter });
+
+  // Step 4: Write file
+  const rolesDir = opts.rolesDir ?? resolveRolesDir();
+  const filePath = writeRole({ frontmatter, body, rolesDir });
+  console.log(`\nRole created: ${filePath}`);
+}
+
 export const rolesCommand = new Command('roles')
   .description('Manage and inspect roles')
   .option('--roles-dir <path>', 'Custom roles directory');
@@ -61,7 +89,7 @@ rolesCommand
     const roles = loadAllRoles(rolesDir);
 
     if (roles.length === 0) {
-      console.log('No roles found. Run "devdemon init --role <name>" to create one.');
+      console.log('No roles found. Run "devdemon roles create <name>" to create one.');
       return;
     }
 
@@ -90,4 +118,17 @@ rolesCommand
     }
 
     showRoleDetail(role);
+  });
+
+rolesCommand
+  .command('create <name>')
+  .description('Create a new role with interactive prompts')
+  .action(async (name: string) => {
+    try {
+      const opts = rolesCommand.opts();
+      await createRoleAction(name, { rolesDir: opts.rolesDir });
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : error}`);
+      process.exit(1);
+    }
   });

@@ -1,7 +1,7 @@
 ---
 name: Product Manager
 interval: 600
-maxTurns: 20
+maxTurns: 100
 tools:
   - Read
   - Bash

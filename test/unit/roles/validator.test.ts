@@ -25,14 +25,14 @@ describe('validateFrontmatter', () => {
     const result = validateFrontmatter({ name: 'Minimal' });
     expect(result.name).toBe('Minimal');
     expect(result.interval).toBe(300);
-    expect(result.maxTurns).toBe(25);
+    expect(result.maxTurns).toBe(50);
     expect(result.permissionMode).toBe('acceptEdits');
   });
 
-  test('各デフォルト値が正しい（interval=300, maxTurns=25, permissionMode=acceptEdits）', () => {
+  test('各デフォルト値が正しい（interval=300, maxTurns=50, permissionMode=acceptEdits）', () => {
     const result = validateFrontmatter({ name: 'Defaults Check' });
     expect(result.interval).toBe(300);
-    expect(result.maxTurns).toBe(25);
+    expect(result.maxTurns).toBe(50);
     expect(result.permissionMode).toBe('acceptEdits');
     expect(result.tools).toBeUndefined();
     expect(result.description).toBeUndefined();

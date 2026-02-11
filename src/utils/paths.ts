@@ -17,6 +17,10 @@ export function getLogPath(repoPath?: string): string {
   return join(getDevDemonDir(repoPath), 'debug.log');
 }
 
+export function getSettingsPath(repoPath?: string): string {
+  return join(getDevDemonDir(repoPath), 'settings.json');
+}
+
 export function ensureDevDemonDir(repoPath?: string): string {
   const dir = getDevDemonDir(repoPath);
   if (!existsSync(dir)) {

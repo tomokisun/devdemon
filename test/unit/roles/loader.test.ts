@@ -19,7 +19,7 @@ describe('RoleLoader', () => {
       const role = loadRole(join(FIXTURES_DIR, 'minimal.md'));
       expect(role.frontmatter.name).toBe('Minimal Role');
       expect(role.frontmatter.interval).toBe(300);
-      expect(role.frontmatter.maxTurns).toBe(25);
+      expect(role.frontmatter.maxTurns).toBe(50);
       expect(role.frontmatter.permissionMode).toBe('acceptEdits');
     });
 
@@ -95,6 +95,17 @@ describe('RoleLoader', () => {
       // プロジェクトルートに roles/ があるので
       const dir = resolveRolesDir();
       expect(dir).toContain('roles');
+    });
+
+    test('cwdにroles/が存在しない場合はビルトインrolesを返す', () => {
+      const originalCwd = process.cwd;
+      process.cwd = () => '/nonexistent/path';
+      try {
+        const dir = resolveRolesDir();
+        expect(dir).toContain('roles');
+      } finally {
+        process.cwd = originalCwd;
+      }
     });
   });
 });

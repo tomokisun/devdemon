@@ -8,6 +8,7 @@ import {
   getStatePath,
   getQueuePath,
   getLogPath,
+  getSettingsPath,
   ensureDevDemonDir,
 } from '../../../src/utils/paths.js';
 
@@ -56,5 +57,10 @@ describe('Paths', () => {
     const dir2 = ensureDevDemonDir(testDir);
     expect(dir1).toBe(dir2);
     expect(existsSync(dir2)).toBe(true);
+  });
+
+  test('getSettingsPath() が settings.json パスを返す', () => {
+    const p = getSettingsPath('/my/repo');
+    expect(p).toBe(join('/my/repo', '.devdemon', 'settings.json'));
   });
 });

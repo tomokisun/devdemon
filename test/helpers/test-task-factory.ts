@@ -1,10 +1,6 @@
-export interface Task {
-  id: string;
-  type: 'user' | 'autonomous';
-  prompt: string;
-  enqueuedAt: string;
-  priority: number;
-}
+import type { Task } from '../../src/queue/types.js';
+
+export type { Task };
 
 export function createTestTask(overrides?: Partial<Task>): Task {
   return {

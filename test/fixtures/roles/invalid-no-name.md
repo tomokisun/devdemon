@@ -1,6 +1,6 @@
 ---
 interval: 300
-maxTurns: 25
+maxTurns: 50
 ---
 
 This role has no name.

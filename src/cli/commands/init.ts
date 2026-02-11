@@ -1,45 +1,27 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join, resolve } from 'path';
-
-interface InitOptions {
-  role?: string;
-}
-
-const ROLE_TEMPLATE = (name: string) => `---
-name: ${name}
-interval: 300
-maxTurns: 25
-permissionMode: acceptEdits
-description: ""
----
-
-`;
+import { resolve } from 'path';
 
 export const initCommand = new Command('init')
   .description('Initialize DevDemon in the current directory')
-  .option('-r, --role <name>', 'Create a custom role template')
-  .action((options: InitOptions) => {
+  .action(() => {
     const cwd = process.cwd();
     const devdemonDir = resolve(cwd, '.devdemon');
 
-    if (existsSync(devdemonDir)) {
-      console.log('Already initialized: .devdemon/ directory exists.');
-    } else {
+    const dirExisted = existsSync(devdemonDir);
+
+    if (!dirExisted) {
       mkdirSync(devdemonDir, { recursive: true });
       console.log('Created .devdemon/ directory.');
     }
 
-    if (options.role) {
-      const rolesDir = resolve(cwd, 'roles');
-      mkdirSync(rolesDir, { recursive: true });
-      const rolePath = join(rolesDir, `${options.role}.md`);
+    const settingsPath = resolve(devdemonDir, 'settings.json');
 
-      if (existsSync(rolePath)) {
-        console.log(`Role file already exists: ${rolePath}`);
-      } else {
-        writeFileSync(rolePath, ROLE_TEMPLATE(options.role), 'utf-8');
-        console.log(`Created role template: ${rolePath}`);
-      }
+    if (!existsSync(settingsPath)) {
+      const template = JSON.stringify({ language: '', model: '' }, null, 2);
+      writeFileSync(settingsPath, template + '\n');
+      console.log('Created .devdemon/settings.json template.');
+    } else if (dirExisted) {
+      console.log('Already initialized: .devdemon/ directory exists.');
     }
   });
