@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Box, Text, useInput } from 'ink';
 
 interface InputBarProps {
@@ -8,15 +8,6 @@ interface InputBarProps {
 }
 
 export function InputBar({ value, onChange, onSubmit }: InputBarProps) {
-  const [cursorVisible, setCursorVisible] = useState(true);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCursorVisible((v) => !v);
-    }, 500);
-    return () => clearInterval(timer);
-  }, []);
-
   useInput((input, key) => {
     if (key.return) {
       // Shift+Enter or Meta+Enter (Option+Enter on macOS): insert newline
@@ -52,7 +43,7 @@ export function InputBar({ value, onChange, onSubmit }: InputBarProps) {
             <Text color="cyan" bold>{i === 0 ? '❯ ' : '  '}</Text>
             <Text>{line}</Text>
             {i === lines.length - 1 && (
-              <Text color="cyan">{cursorVisible ? '\u2588' : ' '}</Text>
+              <Text color="cyan">{'\u2588'}</Text>
             )}
           </Box>
         ))}
