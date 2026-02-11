@@ -1,5 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { MAX_TASK_PROMPT_LENGTH } from '../../constants.js';
+import { taskStatusStyles } from '../theme.js';
 
 export interface TaskLogEntry {
   id: string;
@@ -13,14 +15,7 @@ interface TaskLogProps {
 }
 
 function statusMark(status: TaskLogEntry['status']): { mark: string; color: string } {
-  switch (status) {
-    case 'completed':
-      return { mark: '✓', color: 'green' };
-    case 'failed':
-      return { mark: '✗', color: 'red' };
-    case 'running':
-      return { mark: '⟳', color: 'yellow' };
-  }
+  return taskStatusStyles[status];
 }
 
 function formatTime(iso: string): string {
@@ -30,7 +25,7 @@ function formatTime(iso: string): string {
   return `[${h}:${m}]`;
 }
 
-function truncate(text: string, max = 60): string {
+function truncate(text: string, max = MAX_TASK_PROMPT_LENGTH): string {
   if (text.length <= max) return text;
   return text.slice(0, max - 1) + '…';
 }

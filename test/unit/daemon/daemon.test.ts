@@ -115,9 +115,9 @@ describe('Daemon', () => {
 
       expect(daemon.role).toBe(role);
       expect(daemon.repoPath).toBe('/my/repo');
-      expect(daemon.agent).toBe(agent);
-      expect(daemon.queue).toBe(queue);
-      expect(daemon.state).toBe(state);
+      expect(daemon.agent).toBe(agent as any);
+      expect(daemon.queue).toBe(queue as any);
+      expect(daemon.state).toBe(state as any);
     });
 
     it('starts in not-running state', () => {
@@ -501,12 +501,12 @@ describe('Daemon', () => {
       const { daemon, agent, state } = createDaemon();
 
       const agentResult = {
-        success: true,
+        success: true as const,
         result: 'Done',
         costUsd: 0.05,
         numTurns: 3,
         durationMs: 5000,
-        errors: [],
+        errors: [] as never[],
       };
 
       agent.execute = mock(() => {
@@ -681,8 +681,8 @@ describe('Daemon', () => {
 
       if (cycleTimes.length >= 2) {
         const gap = cycleTimes[1] - cycleTimes[0];
-        // First error: backoff = baseBackoffMs * 1 = 50ms, plus interval wait
-        // Should have waited at least ~50ms
+        // First error: backoff = baseBackoffMs * 2^(1-1) = 50ms (before jitter), plus interval wait
+        // With jitter (50%-100%), minimum wait is ~25ms
         expect(gap).toBeGreaterThanOrEqual(30);
       }
     });
@@ -692,7 +692,7 @@ describe('Daemon', () => {
       expect((Daemon as any).MAX_BACKOFF_MS).toBe(60_000);
 
       // Verify the math: with high consecutiveErrors and large baseBackoffMs,
-      // the backoff would be capped at MAX_BACKOFF_MS
+      // the exponential backoff would be capped at MAX_BACKOFF_MS
       const { daemon } = createDaemon({
         baseBackoffMs: 10000,
         maxConsecutiveErrors: 100,
@@ -700,9 +700,12 @@ describe('Daemon', () => {
 
       // Simulate many consecutive errors by setting private field
       (daemon as any).consecutiveErrors = 10;
-      // baseBackoffMs * 10 = 100_000, but should be capped at 60_000
+      // baseBackoffMs * 2^(10-1) = 10000 * 512 = 5_120_000, but should be capped at 60_000
+      const exponentialMs =
+        (daemon as any).baseBackoffMs *
+        Math.pow(2, (daemon as any).consecutiveErrors - 1);
       const computedBackoff = Math.min(
-        (daemon as any).baseBackoffMs * (daemon as any).consecutiveErrors,
+        exponentialMs,
         (Daemon as any).MAX_BACKOFF_MS,
       );
       expect(computedBackoff).toBe(60_000);

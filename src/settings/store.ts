@@ -2,10 +2,12 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import type { DevDemonSettings } from './types.js';
 import { validateSettings } from './types.js';
+import { Logger } from '../utils/logger.js';
 
 export class SettingsStore {
   private settings: DevDemonSettings;
   private readonly filePath: string;
+  private readonly logger = new Logger();
 
   constructor(filePath: string) {
     this.filePath = filePath;
@@ -14,14 +16,6 @@ export class SettingsStore {
 
   get(): DevDemonSettings {
     return { ...this.settings };
-  }
-
-  getModel(): string | undefined {
-    return this.settings.model;
-  }
-
-  getLanguage(): string | undefined {
-    return this.settings.language;
   }
 
   set(key: keyof DevDemonSettings, value: string): void {
@@ -38,8 +32,8 @@ export class SettingsStore {
     try {
       mkdirSync(dirname(this.filePath), { recursive: true });
       writeFileSync(this.filePath, JSON.stringify(this.settings, null, 2));
-    } catch {
-      // Silently fail if unable to persist
+    } catch (error) {
+      this.logger.error('Failed to save settings', { path: this.filePath, error: String(error) });
     }
   }
 
@@ -48,7 +42,8 @@ export class SettingsStore {
       const data = readFileSync(this.filePath, 'utf-8');
       const parsed = JSON.parse(data);
       return validateSettings(parsed);
-    } catch {
+    } catch (error) {
+      this.logger.warn('Failed to load settings, using defaults', { path: this.filePath, error: String(error) });
       return {};
     }
   }

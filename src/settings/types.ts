@@ -3,11 +3,13 @@ import { z } from 'zod';
 export const settingsSchema = z.object({
   language: z.string().optional(),
   model: z.string().optional(),
+  executable: z.string().optional(),
 });
 
 export interface DevDemonSettings {
   language?: string;
   model?: string;
+  executable?: string;
 }
 
 export function validateSettings(data: unknown): DevDemonSettings {

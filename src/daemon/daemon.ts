@@ -18,6 +18,19 @@ export interface DaemonConfig {
   baseBackoffMs?: number;
 }
 
+export interface LoopDependencies {
+  agent: Agent;
+  queue: TaskQueue;
+  state: StateStore;
+  role: RoleConfig;
+  promptBuilder: PromptBuilder;
+}
+
+export interface LoopResult {
+  task: Task;
+  success: boolean;
+}
+
 export class Daemon extends EventEmitter {
   public role: RoleConfig;
   public repoPath: string;
@@ -94,11 +107,12 @@ export class Daemon extends EventEmitter {
       }
 
       if (this.running) {
-        const backoffMs = Math.min(
-          this.baseBackoffMs * this.consecutiveErrors,
-          Daemon.MAX_BACKOFF_MS,
-        );
-        await this.wait(backoffMs / 1000);
+        const exponentialMs =
+          this.baseBackoffMs * Math.pow(2, this.consecutiveErrors - 1);
+        const cappedMs = Math.min(exponentialMs, Daemon.MAX_BACKOFF_MS);
+        // Add jitter (50%-100% of the capped value) to prevent thundering herd
+        const jitteredMs = cappedMs * (0.5 + Math.random() * 0.5);
+        await this.wait(jitteredMs / 1000);
       }
     }
   }
@@ -124,4 +138,33 @@ export class Daemon extends EventEmitter {
       });
     });
   }
+}
+
+/**
+ * Execute a single daemon loop cycle as a standalone function.
+ * This is a simplified interface without event emission or error tracking.
+ */
+export async function executeLoop(deps: LoopDependencies): Promise<LoopResult> {
+  const task = deps.queue.dequeue() ?? generateAutonomousTask(deps);
+  deps.state.setCurrentTask(task);
+
+  try {
+    const result = await deps.agent.execute(task.prompt, deps.role);
+    deps.state.recordCompletion(task, result);
+    return { task, success: true };
+  } catch (error) {
+    deps.state.recordFailure(task, error);
+    return { task, success: false };
+  }
+}
+
+function generateAutonomousTask(deps: LoopDependencies): Task {
+  const prompt = deps.promptBuilder.buildAutonomous();
+  return {
+    id: nanoid(),
+    type: 'autonomous',
+    prompt,
+    enqueuedAt: new Date().toISOString(),
+    priority: 1,
+  };
 }

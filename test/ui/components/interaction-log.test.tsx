@@ -147,7 +147,7 @@ describe('InteractionLog', () => {
       <InteractionLog entries={entries} streamingText="" />
     );
 
-    expect(lastFrame()).toContain('✻');
+    expect(lastFrame()).toContain('*');
     expect(lastFrame()).toContain('Cooked for 2m 15s');
   });
 
@@ -202,7 +202,7 @@ describe('InteractionLog', () => {
       />
     );
 
-    expect(lastFrame()).toContain('✶');
+    expect(lastFrame()).toContain('●');
     expect(lastFrame()).toContain('Processing...');
   });
 

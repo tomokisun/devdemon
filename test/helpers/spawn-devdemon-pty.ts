@@ -91,7 +91,7 @@ export function spawnDevDemonPty(
         }, timeout);
 
         const origResolve = waiter.resolve;
-        waiter.resolve = (output: string) => {
+        waiter.resolve = (output) => {
           clearTimeout(timer);
           origResolve(output);
         };

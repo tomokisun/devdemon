@@ -17,12 +17,4 @@ describe('devdemon start (E2E)', () => {
     expect(result.stdout).toContain('--repo');
   });
 
-  test.skip('starting with valid role shows startup message', async () => {
-    // Skip: The daemon attempts to call the Claude API via Agent SDK,
-    // which requires valid API credentials. In CI/test environments without
-    // API access, the process may hang or error unpredictably.
-    const result = await spawnDevDemon(['--role', 'swe'], { timeout: 3000 });
-    // Process will be killed by timeout; we just verify it attempted to start
-    expect(result.stdout + result.stderr).toBeTruthy();
-  });
 });

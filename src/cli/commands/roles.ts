@@ -4,7 +4,7 @@ import { getProjectRolesDir } from '../../utils/paths.js';
 import { promptRoleFrontmatter } from '../prompts/role-prompts.js';
 import { generateRoleBody } from '../generators/role-body-generator.js';
 import { writeRole } from '../../roles/writer.js';
-import { validateFrontmatter } from '../../roles/validator.js';
+import { validateFrontmatter, validateRoleName } from '../../roles/validator.js';
 import type { RoleConfig } from '../../roles/types.js';
 import type { RlFactory } from '../prompts/role-prompts.js';
 
@@ -59,6 +59,9 @@ export async function createRoleAction(
   opts: { rolesDir?: string },
   rlFactory?: RlFactory,
 ): Promise<void> {
+  // Step 0: Validate role name early before interactive prompts
+  validateRoleName(name);
+
   console.log(`\nCreating role: ${name}\n`);
 
   // Step 1: Interactive prompts

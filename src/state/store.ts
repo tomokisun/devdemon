@@ -2,11 +2,13 @@ import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { nanoid } from 'nanoid';
 import type { DevDemonState, DevDemonStats, TaskHistoryEntry, CurrentTask } from './types.js';
+import { Logger } from '../utils/logger.js';
 
 export class StateStore {
   private state: DevDemonState;
   private readonly filePath: string;
   private readonly repoPath: string;
+  private readonly logger = new Logger();
 
   constructor(filePath: string, repoPath: string) {
     this.filePath = filePath;
@@ -27,13 +29,13 @@ export class StateStore {
 
   recordCompletion(
     task: { id: string; type: 'user' | 'autonomous'; prompt: string },
-    result: { result: string; costUsd: number; numTurns: number; durationMs: number; success: boolean },
+    result: { result: string | null; costUsd: number; numTurns: number; durationMs: number; success: boolean },
   ): void {
     const entry: TaskHistoryEntry = {
       id: task.id,
       type: task.type,
       prompt: task.prompt,
-      result: result.result,
+      result: result.result ?? '',
       status: 'completed',
       startedAt: this.state.currentTask?.startedAt ?? new Date().toISOString(),
       completedAt: new Date().toISOString(),
@@ -83,8 +85,8 @@ export class StateStore {
     try {
       mkdirSync(dirname(this.filePath), { recursive: true });
       writeFileSync(this.filePath, JSON.stringify(this.state, null, 2));
-    } catch {
-      // Silently fail if unable to persist
+    } catch (error) {
+      this.logger.error('Failed to save state', { path: this.filePath, error: String(error) });
     }
   }
 
@@ -96,7 +98,8 @@ export class StateStore {
         return parsed as DevDemonState;
       }
       return this.createDefaultState();
-    } catch {
+    } catch (error) {
+      this.logger.warn('Failed to load state, using defaults', { path: this.filePath, error: String(error) });
       return this.createDefaultState();
     }
   }

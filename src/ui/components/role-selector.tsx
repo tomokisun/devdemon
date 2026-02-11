@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import type { RoleConfig } from '../../roles/types.js';
+import { colors } from '../theme.js';
 
 interface RoleSelectorProps {
   roles: RoleConfig[];
@@ -17,12 +18,12 @@ export function RoleSelector({ roles, onSelect }: RoleSelectorProps) {
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold color="cyan">Select a role:</Text>
+      <Text bold color={colors.primary}>Select a role:</Text>
       <Box flexDirection="column" marginTop={1}>
         {roles.map((role, i) => (
           <Text key={role.frontmatter.name}>
             {'  '}{i + 1}. <Text bold>{role.frontmatter.name}</Text>
-            {role.frontmatter.description ? <Text color="gray"> - {role.frontmatter.description}</Text> : null}
+            {role.frontmatter.description ? <Text color={colors.muted}> - {role.frontmatter.description}</Text> : null}
           </Text>
         ))}
       </Box>

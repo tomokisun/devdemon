@@ -45,7 +45,7 @@ describe('SettingsStore', () => {
   test('set()で設定を更新してファイルに保存する', () => {
     const store = new SettingsStore(settingsPath);
     store.set('model', 'claude-opus-4-20250514');
-    expect(store.getModel()).toBe('claude-opus-4-20250514');
+    expect(store.get().model).toBe('claude-opus-4-20250514');
 
     // ファイルにも保存されていることを確認
     const saved = JSON.parse(readFileSync(settingsPath, 'utf-8'));
@@ -63,16 +63,16 @@ describe('SettingsStore', () => {
     expect(settings1).not.toBe(settings2);
   });
 
-  test('getModel()がモデル名を返す', () => {
+  test('get().modelがモデル名を返す', () => {
     writeFileSync(settingsPath, JSON.stringify({ model: 'claude-sonnet-4-5-20250929' }));
     const store = new SettingsStore(settingsPath);
-    expect(store.getModel()).toBe('claude-sonnet-4-5-20250929');
+    expect(store.get().model).toBe('claude-sonnet-4-5-20250929');
   });
 
-  test('getLanguage()が言語を返す', () => {
+  test('get().languageが言語を返す', () => {
     writeFileSync(settingsPath, JSON.stringify({ language: 'English' }));
     const store = new SettingsStore(settingsPath);
-    expect(store.getLanguage()).toBe('English');
+    expect(store.get().language).toBe('English');
   });
 
   test('remove()で設定を削除してファイルに保存する', () => {
@@ -80,8 +80,8 @@ describe('SettingsStore', () => {
     const store = new SettingsStore(settingsPath);
     store.remove('model');
 
-    expect(store.getModel()).toBeUndefined();
-    expect(store.getLanguage()).toBe('Japanese');
+    expect(store.get().model).toBeUndefined();
+    expect(store.get().language).toBe('Japanese');
 
     // ファイルにも反映されていることを確認
     const saved = JSON.parse(readFileSync(settingsPath, 'utf-8'));

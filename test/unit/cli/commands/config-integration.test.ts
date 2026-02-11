@@ -156,6 +156,8 @@ describe('config command integration', () => {
     test('--repoオプションなしでprocess.cwd()を使用する', async () => {
       // cwdをテスト用ディレクトリに変更
       const originalCwd = process.cwd();
+      // .devdemonディレクトリを事前に作成（Logger がログファイルを書き込むため）
+      mkdirSync(join(testDir, '.devdemon'), { recursive: true });
       process.chdir(testDir);
 
       try {

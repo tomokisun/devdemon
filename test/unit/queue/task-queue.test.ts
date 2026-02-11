@@ -229,4 +229,89 @@ describe('TaskQueue', () => {
       expect(q.peek()).toBeNull();
     });
   });
+
+  describe('maxQueueSize', () => {
+    it('uses default max queue size of 1000', () => {
+      const q = new TaskQueue(persistPath);
+      // We can't directly inspect the private field, but we can enqueue several tasks without error
+      for (let i = 0; i < 10; i++) {
+        q.enqueueUser(`Task ${i}`);
+      }
+      expect(q.length).toBe(10);
+    });
+
+    it('throws when queue is full', () => {
+      const q = new TaskQueue(persistPath, { maxQueueSize: 3 });
+      q.enqueueUser('Task 1');
+      q.enqueueUser('Task 2');
+      q.enqueueUser('Task 3');
+      expect(() => q.enqueueUser('Task 4')).toThrow('Queue is full (max 3 tasks)');
+    });
+
+    it('allows enqueue again after dequeue frees space', () => {
+      const q = new TaskQueue(persistPath, { maxQueueSize: 2 });
+      q.enqueueUser('Task 1');
+      q.enqueueUser('Task 2');
+      expect(() => q.enqueueUser('Task 3')).toThrow();
+
+      q.dequeue(); // frees one slot
+      const task = q.enqueueUser('Task 3');
+      expect(task.prompt).toBe('Task 3');
+      expect(q.length).toBe(2);
+    });
+
+    it('enqueueAutonomous is not affected by maxQueueSize', () => {
+      const q = new TaskQueue(persistPath, { maxQueueSize: 0 });
+      // enqueueAutonomous does not add to queue, so it should not throw
+      const task = q.enqueueAutonomous('Auto task');
+      expect(task.prompt).toBe('Auto task');
+      expect(q.length).toBe(0);
+    });
+  });
+
+  describe('sorted insertion', () => {
+    it('maintains sorted order when loading unsorted data from file', () => {
+      // Write tasks in reverse priority order to the persist file
+      const tasks = [
+        { id: 'p2', type: 'autonomous', prompt: 'Low priority', enqueuedAt: '2025-01-01T00:00:00.000Z', priority: 2 },
+        { id: 'p0', type: 'user', prompt: 'High priority', enqueuedAt: '2025-01-01T00:00:01.000Z', priority: 0 },
+        { id: 'p1', type: 'autonomous', prompt: 'Mid priority', enqueuedAt: '2025-01-01T00:00:02.000Z', priority: 1 },
+      ];
+      writeFileSync(persistPath, JSON.stringify(tasks));
+
+      const q = new TaskQueue(persistPath);
+      expect(q.dequeue()?.prompt).toBe('High priority');
+      expect(q.dequeue()?.prompt).toBe('Mid priority');
+      expect(q.dequeue()?.prompt).toBe('Low priority');
+    });
+
+    it('peek returns highest priority task without sorting each time', () => {
+      // Seed the file with mixed-priority tasks
+      const tasks = [
+        { id: 'a1', type: 'autonomous', prompt: 'Auto', enqueuedAt: new Date().toISOString(), priority: 1 },
+        { id: 'u1', type: 'user', prompt: 'User', enqueuedAt: new Date().toISOString(), priority: 0 },
+      ];
+      mkdirSync(join(persistPath, '..'), { recursive: true });
+      writeFileSync(persistPath, JSON.stringify(tasks));
+
+      const q = new TaskQueue(persistPath);
+      // peek should return the user task (priority 0) without needing to re-sort
+      expect(q.peek()?.prompt).toBe('User');
+      expect(q.peek()?.prompt).toBe('User'); // second call gives same result
+      expect(q.length).toBe(2); // nothing removed
+    });
+
+    it('preserves FIFO order for tasks with the same priority', () => {
+      const q = new TaskQueue(persistPath);
+      q.enqueueUser('First');
+      q.enqueueUser('Second');
+      q.enqueueUser('Third');
+
+      // All have priority 0, should come out in insertion order
+      expect(q.peek()?.prompt).toBe('First');
+      expect(q.dequeue()?.prompt).toBe('First');
+      expect(q.dequeue()?.prompt).toBe('Second');
+      expect(q.dequeue()?.prompt).toBe('Third');
+    });
+  });
 });

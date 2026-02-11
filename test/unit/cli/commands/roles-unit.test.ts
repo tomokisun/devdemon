@@ -72,6 +72,7 @@ describe('roles command unit tests', () => {
             interval: 60,
             maxTurns: 5,
             permissionMode: 'acceptEdits' as const,
+            description: undefined as string | undefined,
             // descriptionなし
           },
           body: 'Body',

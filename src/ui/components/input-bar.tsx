@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
+import { colors } from '../theme.js';
 
 interface InputBarProps {
   value: string;
@@ -43,10 +44,10 @@ export function InputBar({ value, onChange, onSubmit }: InputBarProps) {
       <Box flexDirection="column" paddingX={1}>
         {lines.map((line, i) => (
           <Box key={i}>
-            <Text color="cyan" bold>{i === 0 ? '❯ ' : '  '}</Text>
+            <Text color={colors.primary} bold>{i === 0 ? '❯ ' : '  '}</Text>
             <Text>{line}</Text>
             {i === lines.length - 1 && (
-              <Text color="cyan">{'\u2588'}</Text>
+              <Text color={colors.primary}>{'\u2588'}</Text>
             )}
           </Box>
         ))}

@@ -1,12 +1,13 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
+import { DEVDEMON_DIR_NAME } from '../../constants.js';
 
 export const initCommand = new Command('init')
   .description('Initialize DevDemon in the current directory')
   .action(() => {
     const cwd = process.cwd();
-    const devdemonDir = resolve(cwd, '.devdemon');
+    const devdemonDir = resolve(cwd, DEVDEMON_DIR_NAME);
 
     const dirExisted = existsSync(devdemonDir);
 

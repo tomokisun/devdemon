@@ -441,6 +441,126 @@ describe('MessageStream', () => {
   });
 
   // -----------------------------------------------------------------------
+  // diff data for Edit tools
+  // -----------------------------------------------------------------------
+  describe('diff data for Edit tool_group', () => {
+    test('Edit tool_groupにdiffDataが含まれる', () => {
+      // Create pending Edit tool_use
+      stream.processMessage({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tu_edit_diff',
+            name: 'Edit',
+            input: {
+              file_path: '/test.ts',
+              old_string: 'hello world',
+              new_string: 'hello universe',
+            },
+          }],
+        },
+      });
+
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: 'OK',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_edit_diff' }] },
+      });
+
+      const event = result as any;
+      expect(event.type).toBe('log');
+      expect(event.entry.kind).toBe('tool_group');
+      expect(event.entry.diffData).toBeDefined();
+      expect(event.entry.diffData.addedCount).toBeGreaterThan(0);
+      expect(event.entry.diffData.removedCount).toBeGreaterThan(0);
+      expect(event.entry.diffData.lines.length).toBeGreaterThan(0);
+    });
+
+    test('Edit以外のtool_groupにはdiffDataが含まれない', () => {
+      // Create pending Read tool_use
+      stream.processMessage({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tu_read_nodiff',
+            name: 'Read',
+            input: { file_path: '/test.ts' },
+          }],
+        },
+      });
+
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: 'file contents here',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_read_nodiff' }] },
+      });
+
+      const event = result as any;
+      expect(event.entry.kind).toBe('tool_group');
+      expect(event.entry.diffData).toBeUndefined();
+    });
+
+    test('old_stringが欠けている場合diffDataはundefined', () => {
+      stream.processMessage({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tu_edit_noinput',
+            name: 'Edit',
+            input: { file_path: '/test.ts', new_string: 'only new' },
+          }],
+        },
+      });
+
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: 'OK',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_edit_noinput' }] },
+      });
+
+      const event = result as any;
+      expect(event.entry.kind).toBe('tool_group');
+      expect(event.entry.diffData).toBeUndefined();
+    });
+
+    test('Edit tool_groupのdiffDataに正しいline typeがある', () => {
+      stream.processMessage({
+        type: 'assistant',
+        message: {
+          content: [{
+            type: 'tool_use',
+            id: 'tu_edit_types',
+            name: 'Edit',
+            input: {
+              file_path: '/test.ts',
+              old_string: 'line1\nold_line\nline3',
+              new_string: 'line1\nnew_line\nline3',
+            },
+          }],
+        },
+      });
+
+      const result = stream.processMessage({
+        type: 'user',
+        tool_use_result: 'OK',
+        message: { content: [{ type: 'tool_result', tool_use_id: 'tu_edit_types' }] },
+      });
+
+      const event = result as any;
+      const diffData = event.entry.diffData;
+      expect(diffData).toBeDefined();
+
+      const types = diffData.lines.map((l: any) => l.type);
+      expect(types).toContain('removed');
+      expect(types).toContain('added');
+      expect(types).toContain('context');
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // auth_status messages
   // -----------------------------------------------------------------------
   describe('auth_status messages', () => {

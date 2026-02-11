@@ -1,6 +1,7 @@
 import matter from 'gray-matter';
 import { mkdirSync, existsSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
+import { validateRoleName } from './validator.js';
 import type { RoleFrontmatter } from './types.js';
 
 export interface WriteRoleOptions {
@@ -20,6 +21,9 @@ function slugify(name: string): string {
 export function writeRole(options: WriteRoleOptions): string {
   const { rolesDir, frontmatter, body } = options;
   const dir = resolve(rolesDir);
+
+  // Validate role name before writing
+  validateRoleName(frontmatter.name);
 
   mkdirSync(dir, { recursive: true });
 

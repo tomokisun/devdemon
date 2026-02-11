@@ -1,5 +1,8 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { formatCost } from '../../utils/format.js';
+import { colors } from '../theme.js';
+import type { GitFileStats } from '../hooks/use-git-stats.js';
 
 interface StatusBarProps {
   queueLength: number;
@@ -8,6 +11,7 @@ interface StatusBarProps {
   model?: string;
   permissionMode?: string;
   gitBranch?: string;
+  fileStats?: GitFileStats | null;
 }
 
 function formatUptime(startedAt: string): string {
@@ -20,11 +24,21 @@ function formatUptime(startedAt: string): string {
   return `${hours}h ${minutes}m`;
 }
 
-function formatCost(usd: number): string {
-  return `$${usd.toFixed(2)}`;
+/** Map permission mode strings to display labels and emphasis colors. */
+function permissionDisplay(mode: string): { label: string; color: string } {
+  switch (mode) {
+    case 'bypassPermissions':
+      return { label: '\u25B6\u25B6 bypass permissions on', color: colors.error };
+    case 'acceptEdits':
+      return { label: '\u25B6 accept edits', color: colors.warning };
+    default:
+      return { label: mode, color: colors.muted };
+  }
 }
 
-export function StatusBar({ queueLength, totalCostUsd, startedAt, model, permissionMode, gitBranch }: StatusBarProps) {
+export function StatusBar({ queueLength, totalCostUsd, startedAt, model, permissionMode, gitBranch, fileStats }: StatusBarProps) {
+  const hasFileChanges = fileStats && fileStats.filesChanged > 0;
+
   return (
     <Box flexDirection="column" paddingX={1}>
     <Box gap={1}>
@@ -34,25 +48,37 @@ export function StatusBar({ queueLength, totalCostUsd, startedAt, model, permiss
           <Text dimColor>│</Text>
         </>
       ) : null}
-      {permissionMode ? (
-        <>
-          <Text dimColor>{permissionMode}</Text>
-          <Text dimColor>│</Text>
-        </>
-      ) : null}
+      {permissionMode ? (() => {
+        const pd = permissionDisplay(permissionMode);
+        return (
+          <>
+            <Text color={pd.color} bold>{pd.label}</Text>
+            <Text dimColor>│</Text>
+          </>
+        );
+      })() : null}
       {gitBranch ? (
         <>
           <Text dimColor>git:</Text>
-          <Text color="green">{gitBranch}</Text>
+          <Text color={colors.success}>{gitBranch}</Text>
           <Text dimColor> │</Text>
         </>
       ) : null}
       <Text>Queue: </Text>
-      <Text color="yellow">{queueLength}</Text>
+      <Text color={colors.warning}>{queueLength}</Text>
       <Text> │ Cost: </Text>
-      <Text color="green">{formatCost(totalCostUsd)}</Text>
+      <Text color={colors.success}>{formatCost(totalCostUsd)}</Text>
       <Text> │ Uptime: </Text>
-      <Text color="cyan">{formatUptime(startedAt)}</Text>
+      <Text color={colors.info}>{formatUptime(startedAt)}</Text>
+      {hasFileChanges ? (
+        <>
+          <Text dimColor> │</Text>
+          <Text> {fileStats.filesChanged} file{fileStats.filesChanged !== 1 ? 's' : ''} </Text>
+          <Text color={colors.success}>+{fileStats.insertions}</Text>
+          <Text> </Text>
+          <Text color={colors.error}>-{fileStats.deletions}</Text>
+        </>
+      ) : null}
     </Box>
     <Text> </Text>
     </Box>

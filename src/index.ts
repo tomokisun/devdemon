@@ -18,10 +18,8 @@ export type {
   CurrentTask,
 } from './state/types.js';
 
-export { Daemon } from './daemon/daemon.js';
-export type { DaemonConfig } from './daemon/daemon.js';
-export { executeLoop } from './daemon/loop.js';
-export type { LoopDependencies, LoopResult } from './daemon/loop.js';
+export { Daemon, executeLoop } from './daemon/daemon.js';
+export type { DaemonConfig, LoopDependencies, LoopResult } from './daemon/daemon.js';
 
 export { SettingsStore } from './settings/store.js';
 export type { DevDemonSettings } from './settings/types.js';

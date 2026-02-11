@@ -194,7 +194,7 @@ describe('selectRole', () => {
       const rl = createInterface({ input, output });
       // Simulate user typing "2" after question is asked
       const origQuestion = rl.question.bind(rl);
-      rl.question = (query: string, cb: (answer: string) => void) => {
+      (rl as any).question = (query: string, cb: (answer: string) => void) => {
         cb('2');
       };
       return rl;
@@ -220,7 +220,7 @@ describe('selectRole', () => {
       const input = new Readable({ read() {} });
       const output = new Writable({ write(_, __, cb) { cb(); } });
       const rl = createInterface({ input, output });
-      rl.question = (query: string, cb: (answer: string) => void) => {
+      (rl as any).question = (query: string, cb: (answer: string) => void) => {
         cb('99');
       };
       return rl;
@@ -466,6 +466,135 @@ describe('startAction', () => {
 
     startSpy.mockRestore();
     stopSpy.mockRestore();
+    logSpy.mockRestore();
+    onSpy.mockRestore();
+  });
+
+  test('--interval に無効な値を渡すとZodErrorを表示してprocess.exitする', async () => {
+    const { mockQuery } = await import('../../../helpers/mock-agent-sdk.js');
+    mockQuery([]);
+
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called');
+    });
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+    const { startAction } = await import('../../../../src/cli/commands/start.js');
+
+    const tempDir = mkdtempSync(join(tmpdir(), 'devdemon-start-'));
+    const rolesDir = mkdtempSync(join(tmpdir(), 'devdemon-roles-'));
+    writeFileSync(
+      join(rolesDir, 'test.md'),
+      '---\nname: IntervalTest\ninterval: 60\nmaxTurns: 5\npermissionMode: acceptEdits\n---\nBody',
+    );
+
+    try {
+      await startAction({
+        role: 'test',
+        repo: tempDir,
+        rolesDir,
+        interval: 'not-a-number',
+      });
+    } catch {
+      // expected process.exit
+    }
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error: Invalid --interval value'),
+    );
+
+    exitSpy.mockRestore();
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test('--interval に0を渡すとZodErrorでprocess.exitする', async () => {
+    const { mockQuery } = await import('../../../helpers/mock-agent-sdk.js');
+    mockQuery([]);
+
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called');
+    });
+    const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+
+    const { startAction } = await import('../../../../src/cli/commands/start.js');
+
+    const tempDir = mkdtempSync(join(tmpdir(), 'devdemon-start-'));
+    const rolesDir = mkdtempSync(join(tmpdir(), 'devdemon-roles-'));
+    writeFileSync(
+      join(rolesDir, 'test.md'),
+      '---\nname: ZeroInterval\ninterval: 60\nmaxTurns: 5\npermissionMode: acceptEdits\n---\nBody',
+    );
+
+    try {
+      await startAction({
+        role: 'test',
+        repo: tempDir,
+        rolesDir,
+        interval: '0',
+      });
+    } catch {
+      // expected process.exit
+    }
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Error: Invalid --interval value "0"'),
+    );
+
+    exitSpy.mockRestore();
+    errorSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test('--dry-run でdaemonを生成せずにUIをレンダリングする', async () => {
+    const logSpy = spyOn(console, 'log').mockImplementation(() => {});
+    const exitSpy = spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called');
+    });
+    let sigintHandler: Function | null = null;
+    const onSpy = spyOn(process, 'on').mockImplementation((event: string, handler: any) => {
+      if (event === 'SIGINT') sigintHandler = handler;
+      return process;
+    });
+
+    const { startAction } = await import('../../../../src/cli/commands/start.js');
+
+    const tempDir = mkdtempSync(join(tmpdir(), 'devdemon-start-'));
+    const rolesDir = mkdtempSync(join(tmpdir(), 'devdemon-roles-'));
+    writeFileSync(
+      join(rolesDir, 'test.md'),
+      '---\nname: DryRunTest\ninterval: 60\nmaxTurns: 5\npermissionMode: acceptEdits\n---\nBody',
+    );
+
+    // startAction with dryRun will await a forever-pending promise,
+    // so we need to race it with a timeout
+    const actionPromise = startAction({
+      role: 'test',
+      repo: tempDir,
+      rolesDir,
+      dryRun: true,
+    });
+
+    // Give it time to set up SIGINT handler
+    await new Promise(r => setTimeout(r, 200));
+
+    // Verify SIGINT handler was registered
+    expect(sigintHandler).not.toBeNull();
+
+    // Trigger SIGINT handler which calls process.exit
+    try {
+      sigintHandler!();
+    } catch {
+      // expected process.exit
+    }
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+
+    exitSpy.mockRestore();
     logSpy.mockRestore();
     onSpy.mockRestore();
   });

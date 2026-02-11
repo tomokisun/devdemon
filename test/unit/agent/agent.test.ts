@@ -258,8 +258,8 @@ describe('Agent', () => {
       await agent.execute('Do something', role);
 
       expect(capturedArgs).not.toBeNull();
-      // The hardcoded model in agent.ts overrides settings.model (last key wins in object literal)
-      expect(capturedArgs.options.model).toBe('claude-opus-4-20250514');
+      // settings.model should be used when provided
+      expect(capturedArgs.options.model).toBe('claude-sonnet-4-5-20250929');
     });
 
     test('settings.languageが設定されている場合、systemPromptにlanguage指示を追加する', async () => {
@@ -312,8 +312,7 @@ describe('Agent', () => {
       await agent.execute('Do something', role);
 
       expect(capturedArgs).not.toBeNull();
-      // model should be the default 'claude-opus-4-20250514' from agent.ts, not from settings
-      // The settings.model spread should not add an extra model key
+      // When settings.model is not set, the default model should be used
       expect(capturedArgs.options.model).toBe('claude-opus-4-20250514');
     });
 
@@ -418,14 +417,14 @@ describe('Agent', () => {
   describe('interrupt()', () => {
     test('currentQuery.interrupt()を呼び出す', async () => {
       const interruptMock = mock(() => Promise.resolve());
-      let resolveIterator: (() => void) | null = null;
+      let resolveIterator: { fn: (() => void) | null } = { fn: null };
 
       mock.module('@anthropic-ai/claude-agent-sdk', () => ({
         query: () => ({
           async *[Symbol.asyncIterator]() {
             // Block until interrupt is called
             await new Promise<void>(resolve => {
-              resolveIterator = resolve;
+              resolveIterator.fn = resolve;
             });
           },
           interrupt: interruptMock,
@@ -447,19 +446,19 @@ describe('Agent', () => {
       expect(interruptMock).toHaveBeenCalledTimes(1);
 
       // Resolve the iterator so execute can complete
-      resolveIterator?.();
+      resolveIterator.fn?.();
       await executePromise.catch(() => {});
     });
 
     test('interrupt()後にcurrentQueryがnullになる', async () => {
       const interruptMock = mock(() => Promise.resolve());
-      let resolveIterator: (() => void) | null = null;
+      let resolveIterator: { fn: (() => void) | null } = { fn: null };
 
       mock.module('@anthropic-ai/claude-agent-sdk', () => ({
         query: () => ({
           async *[Symbol.asyncIterator]() {
             await new Promise<void>(resolve => {
-              resolveIterator = resolve;
+              resolveIterator.fn = resolve;
             });
           },
           interrupt: interruptMock,
@@ -479,7 +478,7 @@ describe('Agent', () => {
       await agent.interrupt();
       expect(interruptMock).toHaveBeenCalledTimes(1);
 
-      resolveIterator?.();
+      resolveIterator.fn?.();
       await executePromise.catch(() => {});
     });
 

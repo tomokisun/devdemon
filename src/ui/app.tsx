@@ -10,6 +10,7 @@ import { RoleSelector } from './components/role-selector.js';
 import { WelcomeScreen } from './components/welcome-screen.js';
 import { useDaemon } from './hooks/use-daemon.js';
 import { useInputQueue } from './hooks/use-input-queue.js';
+import { useGitStats } from './hooks/use-git-stats.js';
 import type { Daemon } from '../daemon/daemon.js';
 import type { RoleConfig } from '../roles/types.js';
 import type { DevDemonStats } from '../state/types.js';
@@ -75,6 +76,7 @@ function DaemonContent({ daemon, onQuit }: { daemon: Daemon; onQuit: () => void 
   const { input, setInput, submit } = useInputQueue(daemon, onQuit);
   const [startedAt] = useState(() => new Date().toISOString());
   const [gitBranch, setGitBranch] = useState<string | undefined>();
+  const fileStats = useGitStats(daemon.repoPath);
 
   useEffect(() => {
     try {
@@ -96,6 +98,7 @@ function DaemonContent({ daemon, onQuit }: { daemon: Daemon; onQuit: () => void 
         streamingText={currentTask?.streamingText ?? ''}
         isProcessing={status === 'running'}
         cycleStartedAt={currentTask?.cycleStartedAt}
+        currentTokens={currentTask?.currentTokens ?? 0}
       />
       <InputBar value={input} onChange={setInput} onSubmit={submit} />
       <StatusBar
@@ -105,6 +108,7 @@ function DaemonContent({ daemon, onQuit }: { daemon: Daemon; onQuit: () => void 
         model={initInfo?.model}
         permissionMode={daemon.role.frontmatter.permissionMode}
         gitBranch={gitBranch}
+        fileStats={fileStats}
       />
     </>
   );
@@ -115,6 +119,7 @@ function DaemonViewWithHeader({ daemon, onQuit }: { daemon: Daemon; onQuit: () =
   const { input, setInput, submit } = useInputQueue(daemon, onQuit);
   const [startedAt] = useState(() => new Date().toISOString());
   const [gitBranch, setGitBranch] = useState<string | undefined>();
+  const fileStats = useGitStats(daemon.repoPath);
 
   useEffect(() => {
     try {
@@ -141,6 +146,7 @@ function DaemonViewWithHeader({ daemon, onQuit }: { daemon: Daemon; onQuit: () =
         streamingText={currentTask?.streamingText ?? ''}
         isProcessing={status === 'running'}
         cycleStartedAt={currentTask?.cycleStartedAt}
+        currentTokens={currentTask?.currentTokens ?? 0}
       />
       <InputBar value={input} onChange={setInput} onSubmit={submit} />
       <StatusBar
@@ -150,6 +156,7 @@ function DaemonViewWithHeader({ daemon, onQuit }: { daemon: Daemon; onQuit: () =
         model={initInfo?.model}
         permissionMode={daemon.role.frontmatter.permissionMode}
         gitBranch={gitBranch}
+        fileStats={fileStats}
       />
     </Box>
   );

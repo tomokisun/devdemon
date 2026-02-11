@@ -1,3 +1,130 @@
+import {
+  MAX_VISIBLE_LINES,
+  MAX_TOOL_RESULT_LENGTH,
+  STREAM_THROTTLE_MS,
+} from '../constants.js';
+import { parseDiffFromEditInput, type DiffData } from '../ui/hooks/diff-parser.js';
+
+// ---------------------------------------------------------------------------
+// SDK Message shape definitions (for type-safe message handling)
+// ---------------------------------------------------------------------------
+
+// These interfaces describe the shapes of messages received from the Claude SDK.
+// They use optional fields because the SDK may send partial data, and the
+// handlers already guard against missing fields.
+
+interface ContentBlock {
+  type: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: Record<string, unknown> | null;
+  source?: unknown;
+  tool_use_id?: string;
+}
+
+interface AssistantMessagePayload {
+  type: 'assistant';
+  parent_tool_use_id?: string | null;
+  message?: {
+    content?: ContentBlock[];
+  };
+}
+
+interface StreamEventPayload {
+  type: 'stream_event';
+  parent_tool_use_id?: string | null;
+  event?: {
+    type?: string;
+    delta?: {
+      type?: string;
+      text?: string;
+    } | null;
+    usage?: {
+      output_tokens?: number;
+    };
+    message?: {
+      usage?: {
+        input_tokens?: number;
+      };
+    };
+  };
+}
+
+interface ResultMessagePayload {
+  type: 'result';
+  subtype?: string;
+  result?: string;
+  total_cost_usd?: number;
+  duration_ms?: number;
+  num_turns?: number;
+  errors?: string[];
+}
+
+interface SystemMessagePayload {
+  type: 'system';
+  parent_tool_use_id?: string | null;
+  subtype?: string;
+  session_id?: string;
+  model?: string;
+  tools?: string[];
+  status?: string;
+  message?: string;
+  hook_name?: string;
+}
+
+interface ToolProgressPayload {
+  type: 'tool_progress';
+  parent_tool_use_id?: string | null;
+  tool_name?: string;
+  tool_use_id?: string;
+  elapsed_time_seconds?: number;
+}
+
+interface ToolUseSummaryPayload {
+  type: 'tool_use_summary';
+  parent_tool_use_id?: string | null;
+  tool_name?: string;
+  tool_use_id?: string;
+  summary?: string;
+  result?: unknown;
+}
+
+interface ToolUseResultObject {
+  content?: string | ContentBlock[];
+  tool_name?: string;
+  tool_use_id?: string;
+  totalToolUseCount?: number;
+  totalTokens?: number;
+  totalDurationMs?: number;
+}
+
+interface UserMessagePayload {
+  type: 'user';
+  parent_tool_use_id?: string | null;
+  tool_use_result?: string | ToolUseResultObject;
+  tool_name?: string;
+  tool_use_id?: string;
+  message?: {
+    content?: ContentBlock[];
+  };
+}
+
+interface AuthStatusPayload {
+  type: 'auth_status';
+}
+
+export type SDKMessagePayload =
+  | AssistantMessagePayload
+  | StreamEventPayload
+  | ResultMessagePayload
+  | SystemMessagePayload
+  | ToolProgressPayload
+  | ToolUseSummaryPayload
+  | UserMessagePayload
+  | AuthStatusPayload
+  | { type: string };
+
 // ---------------------------------------------------------------------------
 // Type definitions
 // ---------------------------------------------------------------------------
@@ -33,6 +160,7 @@ export interface LogEntry {
   batchedTools?: Array<{ toolName: string; count: number }>;
   childEntries?: LogEntry[];
   totalResultLines?: number;
+  diffData?: DiffData;
   toolStats?: {
     totalToolUseCount?: number;
     totalTokens?: number;
@@ -44,7 +172,8 @@ export type UIEvent =
   | { type: 'log'; entry: LogEntry }
   | { type: 'completion'; result: string; costUsd: number; durationMs: number; numTurns: number }
   | { type: 'error'; errors: string[] }
-  | { type: 'init'; sessionId: string; model: string; tools: string[] };
+  | { type: 'init'; sessionId: string; model: string; tools: string[] }
+  | { type: 'token_update'; totalTokens: number };
 
 // ---------------------------------------------------------------------------
 // MessageStream
@@ -53,29 +182,40 @@ export type UIEvent =
 export class MessageStream {
   private streamBuffer: string = '';
   private lastStreamFlush: number = 0;
-  private readonly STREAM_THROTTLE_MS = 100;
+  private readonly streamThrottleMs = STREAM_THROTTLE_MS;
   private pendingToolUse: Map<string, LogEntry> = new Map();
+  private _totalTokens: number = 0;
+
+  /** Current cumulative output token count for the active cycle. */
+  get totalTokens(): number {
+    return this._totalTokens;
+  }
+
+  /** Reset the token counter (call at the start of each cycle). */
+  resetTokens(): void {
+    this._totalTokens = 0;
+  }
 
   // -------------------------------------------------------------------------
   // Public API
   // -------------------------------------------------------------------------
 
-  processMessage(message: any): UIEvent | UIEvent[] | null {
+  processMessage(message: SDKMessagePayload): UIEvent | UIEvent[] | null {
     switch (message.type) {
       case 'assistant':
-        return this.handleAssistant(message);
+        return this.handleAssistant(message as AssistantMessagePayload);
       case 'stream_event':
-        return this.handleStreamEvent(message);
+        return this.handleStreamEvent(message as StreamEventPayload);
       case 'result':
-        return this.handleResult(message);
+        return this.handleResult(message as ResultMessagePayload);
       case 'system':
-        return this.handleSystem(message);
+        return this.handleSystem(message as SystemMessagePayload);
       case 'tool_progress':
-        return this.handleToolProgress(message);
+        return this.handleToolProgress(message as ToolProgressPayload);
       case 'tool_use_summary':
-        return this.handleToolUseSummary(message);
+        return this.handleToolUseSummary(message as ToolUseSummaryPayload);
       case 'user':
-        return this.handleUser(message);
+        return this.handleUser(message as UserMessagePayload);
       case 'auth_status':
         return null;
       default:
@@ -106,12 +246,12 @@ export class MessageStream {
   // Private message-type handlers
   // -------------------------------------------------------------------------
 
-  private handleAssistant(message: any): UIEvent[] | null {
+  private handleAssistant(message: AssistantMessagePayload): UIEvent[] | null {
     if (message.parent_tool_use_id) {
       return null;
     }
 
-    const contentBlocks: any[] = message.message?.content;
+    const contentBlocks = message.message?.content;
     if (!Array.isArray(contentBlocks) || contentBlocks.length === 0) {
       return null;
     }
@@ -129,15 +269,19 @@ export class MessageStream {
           },
         });
       } else if (block.type === 'tool_use') {
+        const toolName = block.name ?? '';
+        const toolUseId = block.id ?? '';
         const entry: LogEntry = {
           kind: 'tool_use',
-          text: this.formatToolCallTitle(block.name, block.input),
+          text: this.formatToolCallTitle(toolName, block.input),
           timestamp: Date.now(),
-          toolName: block.name,
-          toolUseId: block.id,
+          toolName,
+          toolUseId,
           toolInput: block.input ?? {},
         };
-        this.pendingToolUse.set(block.id, entry);
+        if (toolUseId) {
+          this.pendingToolUse.set(toolUseId, entry);
+        }
         events.push({ type: 'log', entry });
       }
     }
@@ -145,12 +289,25 @@ export class MessageStream {
     return events.length > 0 ? events : null;
   }
 
-  private handleStreamEvent(message: any): UIEvent | null {
+  private handleStreamEvent(message: StreamEventPayload): UIEvent | UIEvent[] | null {
     if (message.parent_tool_use_id) {
       return null;
     }
 
     const event = message.event;
+
+    // Track tokens from message_delta events (emitted at end of each message turn)
+    if (event?.type === 'message_delta' && event.usage?.output_tokens) {
+      this._totalTokens += event.usage.output_tokens;
+      return { type: 'token_update', totalTokens: this._totalTokens };
+    }
+
+    // Track input tokens from message_start events
+    if (event?.type === 'message_start' && event.message?.usage?.input_tokens) {
+      this._totalTokens += event.message.usage.input_tokens;
+      return { type: 'token_update', totalTokens: this._totalTokens };
+    }
+
     if (
       event?.type !== 'content_block_delta' ||
       event.delta?.type !== 'text_delta'
@@ -162,14 +319,14 @@ export class MessageStream {
     this.streamBuffer += deltaText;
 
     const now = Date.now();
-    if (now - this.lastStreamFlush >= this.STREAM_THROTTLE_MS) {
+    if (now - this.lastStreamFlush >= this.streamThrottleMs) {
       return this.flushStream();
     }
 
     return null;
   }
 
-  private handleResult(message: any): UIEvent {
+  private handleResult(message: ResultMessagePayload): UIEvent {
     if (message.subtype === 'success') {
       return {
         type: 'completion',
@@ -186,7 +343,7 @@ export class MessageStream {
     };
   }
 
-  private handleSystem(message: any): UIEvent | null {
+  private handleSystem(message: SystemMessagePayload): UIEvent | null {
     if (message.parent_tool_use_id) {
       return null;
     }
@@ -237,7 +394,7 @@ export class MessageStream {
     }
   }
 
-  private handleToolProgress(message: any): UIEvent | null {
+  private handleToolProgress(message: ToolProgressPayload): UIEvent | null {
     if (message.parent_tool_use_id) {
       return null;
     }
@@ -254,7 +411,7 @@ export class MessageStream {
     };
   }
 
-  private handleToolUseSummary(message: any): UIEvent | null {
+  private handleToolUseSummary(message: ToolUseSummaryPayload): UIEvent | null {
     if (message.parent_tool_use_id) {
       return null;
     }
@@ -282,7 +439,7 @@ export class MessageStream {
     };
   }
 
-  private handleUser(message: any): UIEvent | null {
+  private handleUser(message: UserMessagePayload): UIEvent | null {
     if (message.parent_tool_use_id) {
       return null;
     }
@@ -301,8 +458,8 @@ export class MessageStream {
         text = raw.content;
       } else if (Array.isArray(raw.content)) {
         text = raw.content
-          .filter((c: any) => c.type === 'text')
-          .map((c: any) => c.text ?? '')
+          .filter((c: ContentBlock) => c.type === 'text')
+          .map((c: ContentBlock) => c.text ?? '')
           .join('\n');
       } else {
         text = JSON.stringify(raw.content);
@@ -311,15 +468,15 @@ export class MessageStream {
       text = JSON.stringify(raw);
     }
 
-    if (text.length > 500) {
-      text = text.slice(0, 500) + '...';
+    if (text.length > MAX_TOOL_RESULT_LENGTH) {
+      text = text.slice(0, MAX_TOOL_RESULT_LENGTH) + '...';
     }
 
     // Try to correlate with a pending tool_use to create a tool_group
     const content = message.message?.content;
     let toolUseId: string | undefined;
     if (Array.isArray(content)) {
-      const toolResult = content.find((c: any) => c.type === 'tool_result');
+      const toolResult = content.find((c: ContentBlock) => c.type === 'tool_result');
       toolUseId = toolResult?.tool_use_id;
     }
 
@@ -327,7 +484,6 @@ export class MessageStream {
       const pending = this.pendingToolUse.get(toolUseId);
       if (pending) {
         const allLines = text.split('\n');
-        const MAX_VISIBLE_LINES = 5;
         const resultLines = allLines.slice(0, MAX_VISIBLE_LINES);
         const totalResultLines = allLines.length;
         if (allLines.length > MAX_VISIBLE_LINES) {
@@ -352,6 +508,15 @@ export class MessageStream {
 
         this.pendingToolUse.delete(toolUseId);
 
+        // Parse diff data for Edit tools
+        let diffData: DiffData | undefined;
+        if (pending.toolName === 'Edit' && pending.toolInput) {
+          const parsed = parseDiffFromEditInput(pending.toolInput);
+          if (parsed) {
+            diffData = parsed;
+          }
+        }
+
         return {
           type: 'log',
           entry: {
@@ -363,11 +528,15 @@ export class MessageStream {
             toolInput: pending.toolInput,
             resultLines,
             totalResultLines,
+            diffData,
             toolStats,
           },
         };
       }
     }
+
+    const rawToolName = typeof raw === 'object' ? raw.tool_name : undefined;
+    const rawToolUseId = typeof raw === 'object' ? raw.tool_use_id : undefined;
 
     return {
       type: 'log',
@@ -375,8 +544,8 @@ export class MessageStream {
         kind: 'tool_result',
         text,
         timestamp: Date.now(),
-        toolName: raw.tool_name ?? message.tool_name,
-        toolUseId: raw.tool_use_id ?? message.tool_use_id,
+        toolName: rawToolName ?? message.tool_name,
+        toolUseId: rawToolUseId ?? message.tool_use_id,
       },
     };
   }
@@ -385,31 +554,32 @@ export class MessageStream {
   // Helpers
   // -------------------------------------------------------------------------
 
-  private formatToolCallTitle(toolName: string, input: unknown): string {
-    if (!input || typeof input !== 'object') return `${toolName} ${this.summarizeToolInput(input)}`;
-    const obj = input as Record<string, unknown>;
-
-    if (toolName === 'Task' && typeof obj.description === 'string') {
-      return `Task(${obj.description})`;
-    }
-    if (toolName === 'Read' && typeof obj.file_path === 'string') {
-      return `Read(${this.shortenPath(obj.file_path as string)})`;
-    }
-    if (toolName === 'Bash' && typeof obj.command === 'string') {
+  private static readonly TOOL_FORMATTERS: Record<string, (obj: Record<string, unknown>, shortenPath: (p: string) => string) => string | null> = {
+    'Task': (obj) => typeof obj.description === 'string' ? `Task(${obj.description})` : null,
+    'Read': (obj, shortenPath) => typeof obj.file_path === 'string' ? `Read(${shortenPath(obj.file_path as string)})` : null,
+    'Bash': (obj) => {
+      if (typeof obj.command !== 'string') return null;
       const cmd = (obj.command as string).length > 60
         ? (obj.command as string).slice(0, 57) + '...'
         : obj.command as string;
       return `Bash(${cmd})`;
+    },
+    'Write': (obj, shortenPath) => typeof obj.file_path === 'string' ? `Write(${shortenPath(obj.file_path as string)})` : null,
+    'Edit': (obj, shortenPath) => typeof obj.file_path === 'string' ? `Edit(${shortenPath(obj.file_path as string)})` : null,
+    'Grep': (obj) => typeof obj.pattern === 'string' ? `Grep(${obj.pattern})` : null,
+    'Glob': (obj) => typeof obj.pattern === 'string' ? `Glob(${obj.pattern})` : null,
+  };
+
+  private formatToolCallTitle(toolName: string, input: unknown): string {
+    if (!input || typeof input !== 'object') return `${toolName} ${this.summarizeToolInput(input)}`;
+    const obj = input as Record<string, unknown>;
+
+    const formatter = MessageStream.TOOL_FORMATTERS[toolName];
+    if (formatter) {
+      const result = formatter(obj, this.shortenPath);
+      if (result !== null) return result;
     }
-    if ((toolName === 'Write' || toolName === 'Edit') && typeof obj.file_path === 'string') {
-      return `${toolName}(${this.shortenPath(obj.file_path as string)})`;
-    }
-    if (toolName === 'Grep' && typeof obj.pattern === 'string') {
-      return `Grep(${obj.pattern})`;
-    }
-    if (toolName === 'Glob' && typeof obj.pattern === 'string') {
-      return `Glob(${obj.pattern})`;
-    }
+
     return `${toolName} ${this.summarizeToolInput(input)}`;
   }
 

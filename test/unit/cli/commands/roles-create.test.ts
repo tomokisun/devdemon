@@ -13,7 +13,7 @@ function mockRlFactory(answers: string[]) {
     const input = new Readable({ read() {} });
     const output = new Writable({ write(_, __, cb) { cb(); } });
     const rl = createInterface({ input, output });
-    rl.question = (_q: string, cb: (a: string) => void) => { cb(answers[idx++] ?? ''); };
+    (rl as any).question = (_q: string, cb: (a: string) => void) => { cb(answers[idx++] ?? ''); };
     return rl;
   };
 }

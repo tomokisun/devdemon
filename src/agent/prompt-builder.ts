@@ -1,5 +1,6 @@
 import type { RoleConfig } from '../roles/types.js';
 import type { ProgressTracker } from './progress-tracker.js';
+import { RECENT_HISTORY_COUNT, MAX_HISTORY_PROMPT_LENGTH } from '../constants.js';
 
 export interface StateStoreReader {
   getRepoPath(): string;
@@ -21,10 +22,10 @@ export class PromptBuilder {
 
   buildAutonomous(): string {
     const context = this.buildContext();
-    const recentHistory = this.state.getRecentHistory(5);
+    const recentHistory = this.state.getRecentHistory(RECENT_HISTORY_COUNT);
     const historyText =
       recentHistory.length > 0
-        ? recentHistory.map((t) => `- [${t.status}] ${t.prompt.slice(0, 100)}`).join('\n')
+        ? recentHistory.map((t) => `- [${t.status}] ${t.prompt.slice(0, MAX_HISTORY_PROMPT_LENGTH)}`).join('\n')
         : 'No previous tasks.';
     const progress = this.progressTracker.read();
 

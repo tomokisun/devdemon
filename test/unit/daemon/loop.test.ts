@@ -1,5 +1,5 @@
 import { describe, it, expect, mock, beforeEach } from 'bun:test';
-import { executeLoop, type LoopDependencies } from '../../../src/daemon/loop.js';
+import { executeLoop, type LoopDependencies } from '../../../src/daemon/daemon.js';
 import { createTestRole } from '../../helpers/test-role-factory.js';
 import { createTestTask } from '../../helpers/test-task-factory.js';
 import type { AgentResult } from '../../../src/agent/agent.js';
@@ -95,13 +95,13 @@ describe('executeLoop', () => {
 
     it('records completion with the agent result', async () => {
       const task = createTestTask();
-      const agentResult: AgentResult = {
-        success: true,
+      const agentResult = {
+        success: true as const,
         result: 'Done!',
         costUsd: 0.10,
         numTurns: 5,
         durationMs: 8000,
-        errors: [],
+        errors: [] as never[],
       };
       const agent = createMockAgent();
       agent.execute = mock(() => Promise.resolve(agentResult));

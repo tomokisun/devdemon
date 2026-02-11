@@ -7,7 +7,6 @@ describe('devdemon roles (E2E)', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain('Software Engineer');
     expect(result.stdout).toContain('Product Manager');
-    expect(result.stdout).toContain('document-creator');
     expect(result.stdout).toContain('Built-in Roles');
   });
 

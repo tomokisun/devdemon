@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { RoleConfig } from '../roles/types.js';
 import type { DevDemonSettings } from '../settings/types.js';
 import { loadClaudeMd } from './claude-md-loader.js';
@@ -13,6 +14,9 @@ export interface AgentResult {
   durationMs: number;
   errors: string[];
 }
+
+const DEFAULT_MODEL = 'claude-opus-4-20250514';
+const DEFAULT_EXECUTABLE = 'bun';
 
 export class Agent extends EventEmitter {
   private currentQuery: ReturnType<typeof query> | null = null;
@@ -29,7 +33,7 @@ export class Agent extends EventEmitter {
 
   async execute(prompt: string, role: RoleConfig): Promise<AgentResult> {
     const startTime = Date.now();
-    let result: any = null;
+    let result: SDKResultMessage | null = null;
 
     const languageInstruction = this.settings.language
       ? `\n\nIMPORTANT: Always respond in ${this.settings.language}. Use ${this.settings.language} for all explanations, comments, and communications.`
@@ -44,7 +48,6 @@ export class Agent extends EventEmitter {
       prompt,
       options: {
         cwd: this.repoPath,
-        ...(this.settings.model ? { model: this.settings.model } : {}),
         systemPrompt: {
           type: 'preset',
           preset: 'claude_code',
@@ -53,9 +56,9 @@ export class Agent extends EventEmitter {
         allowedTools: role.frontmatter.tools,
         permissionMode: role.frontmatter.permissionMode,
         maxTurns: role.frontmatter.maxTurns,
-        model: 'claude-opus-4-20250514',
+        model: this.settings.model ?? DEFAULT_MODEL,
         includePartialMessages: true,
-        executable: 'bun',
+        executable: (this.settings.executable ?? DEFAULT_EXECUTABLE) as 'bun' | 'deno' | 'node',
         effort: 'high',
         thinking: {
           type: 'adaptive',
@@ -70,13 +73,24 @@ export class Agent extends EventEmitter {
       }
     }
 
+    const durationMs = Date.now() - startTime;
+    if (result?.subtype === 'success') {
+      return {
+        success: true,
+        result: result.result,
+        costUsd: result.total_cost_usd,
+        numTurns: result.num_turns,
+        durationMs,
+        errors: [],
+      };
+    }
     return {
-      success: result?.subtype === 'success',
-      result: result?.subtype === 'success' ? result.result : null,
+      success: false,
+      result: null,
       costUsd: result?.total_cost_usd ?? 0,
       numTurns: result?.num_turns ?? 0,
-      durationMs: Date.now() - startTime,
-      errors: result?.subtype === 'error' ? result.errors : [],
+      durationMs,
+      errors: result?.errors ?? [],
     };
   }
 

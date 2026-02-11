@@ -1,8 +1,9 @@
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import { DEVDEMON_DIR_NAME } from '../constants.js';
 
 export function getDevDemonDir(repoPath?: string): string {
-  return join(repoPath ?? process.cwd(), '.devdemon');
+  return join(repoPath ?? process.cwd(), DEVDEMON_DIR_NAME);
 }
 
 export function getStatePath(repoPath?: string): string {

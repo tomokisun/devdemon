@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { homedir } from 'os';
+import { DEVDEMON_DIR_NAME } from '../constants.js';
 
 export interface ClaudeMdResult {
   content: string;
@@ -16,7 +17,7 @@ const MAX_DEPTH = 4;
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
-  '.devdemon',
+  DEVDEMON_DIR_NAME,
   'dist',
   'build',
   'out',
