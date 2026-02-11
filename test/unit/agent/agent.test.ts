@@ -1,23 +1,10 @@
 import { describe, test, expect, mock, beforeEach, afterEach } from 'bun:test';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { randomUUID } from 'crypto';
 import { mockQuery, createSuccessResult, createErrorResult } from '../../helpers/mock-agent-sdk.js';
 import { createTestRole } from '../../helpers/test-role-factory.js';
 
 describe('Agent', () => {
-  let tmpTestDir: string | null = null;
-
   beforeEach(() => {
     mock.restore();
-  });
-
-  afterEach(() => {
-    if (tmpTestDir) {
-      rmSync(tmpTestDir, { recursive: true, force: true });
-      tmpTestDir = null;
-    }
   });
 
   describe('execute()', () => {
@@ -38,7 +25,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole({
         frontmatter: { tools: ['Read', 'Edit'], maxTurns: 10, permissionMode: 'bypassPermissions' },
         body: 'Custom system prompt.',
@@ -68,7 +55,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole({ body: 'You are a code reviewer.' });
 
       await agent.execute('Review code', role);
@@ -97,7 +84,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const tools = ['Read', 'Write', 'Bash'];
       const role = createTestRole({ frontmatter: { tools } });
 
@@ -123,7 +110,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole({ frontmatter: { maxTurns: 42 } });
 
       await agent.execute('Do work', role);
@@ -148,7 +135,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
       const emitted: any[] = [];
 
@@ -165,7 +152,7 @@ describe('Agent', () => {
       mockQuery([createSuccessResult()]);
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       const result = await agent.execute('Do something', role);
@@ -179,7 +166,7 @@ describe('Agent', () => {
       mockQuery([createErrorResult(['Error 1', 'Error 2'])]);
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       const result = await agent.execute('Do something', role);
@@ -193,7 +180,7 @@ describe('Agent', () => {
       mockQuery([createSuccessResult({ total_cost_usd: 0.123 })]);
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       const result = await agent.execute('Do something', role);
@@ -205,7 +192,7 @@ describe('Agent', () => {
       mockQuery([createSuccessResult({ num_turns: 7 })]);
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       const result = await agent.execute('Do something', role);
@@ -227,7 +214,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       const result = await agent.execute('Do something', role);
@@ -252,7 +239,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', { model: 'claude-sonnet-4-5-20250929' }, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', { model: 'claude-sonnet-4-5-20250929' });
       const role = createTestRole();
 
       await agent.execute('Do something', role);
@@ -279,7 +266,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', { language: 'Japanese' }, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', { language: 'Japanese' });
       const role = createTestRole({ body: 'You are a test role.' });
 
       await agent.execute('Do something', role);
@@ -306,7 +293,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       await agent.execute('Do something', role);
@@ -316,102 +303,6 @@ describe('Agent', () => {
       expect(capturedArgs.options.model).toBe('claude-opus-4-20250514');
     });
 
-    test('systemPromptにCLAUDE.mdの内容がappendされる', async () => {
-      const successResult = createSuccessResult();
-      let capturedArgs: any = null;
-
-      tmpTestDir = join(tmpdir(), `devdemon-agent-test-${randomUUID()}`);
-      mkdirSync(tmpTestDir, { recursive: true });
-      writeFileSync(join(tmpTestDir, 'CLAUDE.md'), '# Project Rules\nAlways use TypeScript.');
-
-      mock.module('@anthropic-ai/claude-agent-sdk', () => ({
-        query: (...args: any[]) => {
-          capturedArgs = args[0];
-          return {
-            async *[Symbol.asyncIterator]() {
-              yield successResult;
-            },
-            interrupt: mock(() => Promise.resolve()),
-          };
-        },
-      }));
-
-      const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent(tmpTestDir, {}, { globalConfigDir: '/nonexistent/dir' });
-      const role = createTestRole({ body: 'You are a test role.' });
-
-      await agent.execute('Do something', role);
-
-      expect(capturedArgs.options.systemPrompt.append).toContain('You are a test role.');
-      expect(capturedArgs.options.systemPrompt.append).toContain('## CLAUDE.md Instructions');
-      expect(capturedArgs.options.systemPrompt.append).toContain('Always use TypeScript.');
-    });
-
-    test('CLAUDE.mdが存在しない場合、appendにCLAUDE.mdセクションが含まれない', async () => {
-      const successResult = createSuccessResult();
-      let capturedArgs: any = null;
-
-      tmpTestDir = join(tmpdir(), `devdemon-agent-test-${randomUUID()}`);
-      mkdirSync(tmpTestDir, { recursive: true });
-      // No CLAUDE.md file created in tmpTestDir
-
-      mock.module('@anthropic-ai/claude-agent-sdk', () => ({
-        query: (...args: any[]) => {
-          capturedArgs = args[0];
-          return {
-            async *[Symbol.asyncIterator]() {
-              yield successResult;
-            },
-            interrupt: mock(() => Promise.resolve()),
-          };
-        },
-      }));
-
-      const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent(tmpTestDir, {}, { globalConfigDir: '/nonexistent/dir' });
-      const role = createTestRole({ body: 'You are a code reviewer.' });
-
-      await agent.execute('Review code', role);
-
-      expect(capturedArgs.options.systemPrompt.append).toBe('You are a code reviewer.');
-      expect(capturedArgs.options.systemPrompt.append).not.toContain('CLAUDE.md');
-    });
-
-    test('appendの順序がrole.body → CLAUDE.md → languageの順になる', async () => {
-      const successResult = createSuccessResult();
-      let capturedArgs: any = null;
-
-      tmpTestDir = join(tmpdir(), `devdemon-agent-test-${randomUUID()}`);
-      mkdirSync(tmpTestDir, { recursive: true });
-      writeFileSync(join(tmpTestDir, 'CLAUDE.md'), 'CLAUDE_MD_CONTENT');
-
-      mock.module('@anthropic-ai/claude-agent-sdk', () => ({
-        query: (...args: any[]) => {
-          capturedArgs = args[0];
-          return {
-            async *[Symbol.asyncIterator]() {
-              yield successResult;
-            },
-            interrupt: mock(() => Promise.resolve()),
-          };
-        },
-      }));
-
-      const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent(tmpTestDir, { language: 'Japanese' }, { globalConfigDir: '/nonexistent/dir' });
-      const role = createTestRole({ body: 'ROLE_BODY' });
-
-      await agent.execute('Do something', role);
-
-      const append = capturedArgs.options.systemPrompt.append;
-      const roleIdx = append.indexOf('ROLE_BODY');
-      const claudeIdx = append.indexOf('CLAUDE_MD_CONTENT');
-      const langIdx = append.indexOf('Japanese');
-
-      expect(roleIdx).toBeGreaterThanOrEqual(0);
-      expect(claudeIdx).toBeGreaterThan(roleIdx);
-      expect(langIdx).toBeGreaterThan(claudeIdx);
-    });
   });
 
   describe('interrupt()', () => {
@@ -432,7 +323,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       // Start execute but don't await it (it will block)
@@ -466,7 +357,7 @@ describe('Agent', () => {
       }));
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
       const role = createTestRole();
 
       const executePromise = agent.execute('Do something', role);
@@ -486,7 +377,7 @@ describe('Agent', () => {
       mockQuery([createSuccessResult()]);
 
       const { Agent } = await import('../../../src/agent/agent.js');
-      const agent = new Agent('/test/repo', {}, { globalConfigDir: '/nonexistent/dir' });
+      const agent = new Agent('/test/repo', {});
 
       // Should not throw
       await agent.interrupt();
