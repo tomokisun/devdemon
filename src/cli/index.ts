@@ -14,7 +14,20 @@ export const program = new Command()
   .option('-i, --interval <seconds>', 'Override interval in seconds')
   .option('-v, --verbose', 'Enable verbose output')
   .option('--dry-run', 'Render UI without starting daemon (for testing)')
-  .action(startAction);
+  .option('-p, --print <prompt>', 'Run a single prompt non-interactively and print the result')
+  .option('--output-format <format>', 'Output format: text, json, or stream-json (default: text)')
+  .option('--max-turns <n>', 'Override max turns from role')
+  .option('--allowed-tools <tools>', 'Override allowed tools (comma-separated)')
+  .option('--system-prompt <prompt>', 'Override system prompt')
+  .option('--append-system-prompt <prompt>', 'Append to system prompt')
+  .action(async (options) => {
+    if (options.print) {
+      const { printAction } = await import('./commands/print.js');
+      await printAction(options);
+    } else {
+      await startAction(options);
+    }
+  });
 
 program.addCommand(rolesCommand);
 program.addCommand(initCommand);
